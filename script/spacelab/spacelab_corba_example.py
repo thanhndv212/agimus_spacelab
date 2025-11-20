@@ -36,7 +36,7 @@ def build_initial_configuration():
     
     # Start with robot configurations
     # UR10 (6 DOF) + VISPA_BASE (2 DOF) + VISPA_ARM (6 DOF)
-    q_robot = np.array(config.UR10 + config.VISPA2 + config.VISPA)
+    q_robot = np.array(config.UR10 + config.VISPA_BASE + config.VISPA_ARM)
     
     # Add object poses (convert XYZRPY to XYZQUAT for freeflyer)
     object_poses = [
@@ -165,8 +165,8 @@ def main(solve=False, rule_strategy="auto"):
     print("\n7. Building initial configuration...")
     q_init = build_initial_configuration()
     print(f"   Configuration size: {len(q_init)} DOF")
-    print(f"   - Robot DOF: {len(InitialConfigurations.UR10 + InitialConfigurations.VISPA2 + InitialConfigurations.VISPA)}")
-    print(f"   - Objects DOF: {len(q_init) - len(InitialConfigurations.UR10 + InitialConfigurations.VISPA2 + InitialConfigurations.VISPA)}")
+    print(f"   - Robot DOF: {len(InitialConfigurations.UR10 + InitialConfigurations.VISPA_BASE + InitialConfigurations.VISPA_ARM)}")
+    print(f"   - Objects DOF: {len(q_init) - len(InitialConfigurations.UR10 + InitialConfigurations.VISPA_BASE + InitialConfigurations.VISPA_ARM)}")
     
     # Set initial configuration
     planner.set_initial_config(q_init)
