@@ -11,27 +11,27 @@ class RobotJoints:
     
     # UR10 joints (6 DOF)
     UR10 = [
-        "ur10/shoulder_pan_joint",
-        "ur10/shoulder_lift_joint",
-        "ur10/elbow_joint",
-        "ur10/wrist_1_joint",
-        "ur10/wrist_2_joint",
-        "ur10/wrist_3_joint",
+        "spacelab/ur10_joint_1_2",
+        "spacelab/ur10_joint_2_3",
+        "spacelab/ur10_joint_3_4",
+        "spacelab/ur10_joint_4_5",
+        "spacelab/ur10_joint_5_6",
+        "spacelab/ur10_joint_6_7",
     ]
     
     # VISPA joints (8 DOF: 2 base + 6 arm)
     VISPA_BASE = [
-        "vispa/base_x",
-        "vispa/base_y",
+        "spacelab/vispa2_joint_2_3",
+        "spacelab/vispa2_joint_3_eeWorkbench",
     ]
     
     VISPA_ARM = [
-        "vispa/joint1",
-        "vispa/joint2",
-        "vispa/joint3",
-        "vispa/joint4",
-        "vispa/joint5",
-        "vispa/joint6",
+        "spacelab/vispa_joint_1_2",
+        "spacelab/vispa_joint_2_3",
+        "spacelab/vispa_joint_3_4",
+        "spacelab/vispa_joint_4_5",
+        "spacelab/vispa_joint_5_6",
+        "spacelab/vispa_joint_6_7",
     ]
     
     # Object root joints (freeflyer: 7 DOF each)
@@ -62,7 +62,7 @@ class InitialConfigurations:
     # Robot joint configurations (in radians)
     UR10 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # 6 DOF
     VISPA_BASE = [0.0, 0.0]  # 2 DOF base
-    VISPA_ARM = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # 6 DOF arm
+    VISPA_ARM = [0.0, 3.14, 0.0, 0.0, 0.0, 0.0]  # 6 DOF arm
     
     # Object poses in XYZRPY format [x, y, z, roll, pitch, yaw]
     RS1 = [
@@ -165,8 +165,8 @@ class ManipulationConfig:
     
     # Define all grippers available on the robots
     GRIPPERS = {
-        "ur10_gripper": "spacelab/ur10/gripper",
-        "vispa_gripper": "spacelab/vispa/gripper",
+        "ur10_gripper": "spacelab/gripper",
+        "vispa_gripper": "spacelab/gripper",
     }
     
     # Define all objects and their handles
