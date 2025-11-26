@@ -11,8 +11,9 @@ from pathlib import Path
 import numpy as np
 
 # Add config directory to path for task-specific configs
-config_dir = Path(__file__).parent.parent.parent / "config"
+config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
+
 
 from agimus_spacelab.corba import CorbaManipulationPlanner
 from agimus_spacelab.config import RuleGenerator
@@ -108,7 +109,7 @@ def setup_spacelab_scene():
         "cleat_gripper/root_joint",
     ]
     
-    bounds = JointBounds.freeflyer()
+    bounds = JointBounds.freeflyer_bounds()
     for joint in freeflyer_joints:
         planner.set_joint_bounds(joint, bounds)
     
