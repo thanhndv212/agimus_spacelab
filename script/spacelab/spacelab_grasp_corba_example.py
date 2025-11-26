@@ -72,14 +72,19 @@ class TaskConfig:
     # Tool lifted position (tool held in air)
     TOOL_IN_AIR = None  # Will be computed relative to dispenser
     
+    # Tool position relative to dispenser surface [x, y, z, qx, qy, qz, qw]
+    # This defines where the tool sits on the dispenser
+    TOOL_ON_SURFACE = None  # Will be computed from initial config
+    
     # Constraint masks (6 DOF: x, y, z, roll, pitch, yaw)
     GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
     
-    # Placement mask: fix z, roll, pitch (tool flat on dispenser)
-    PLACEMENT_MASK = [False, False, True, True, True, False]
+    # Placement mask: fix Z and all rotations (tool flat on surface)
+    # This acts like a "surface contact" - tool stays on surface
+    PLACEMENT_MASK = [False, False, True, True, True, True]
     
-    # Placement complement mask: x, y, yaw free
-    PLACEMENT_COMPLEMENT_MASK = [True, True, False, False, False, True]
+    # Placement complement mask: X, Y free (tool can slide on surface)
+    PLACEMENT_COMPLEMENT_MASK = [True, True, False, False, False, False]
     
     # Graph states (order matters for solver performance!)
     GRAPH_NODES = [
@@ -95,12 +100,15 @@ class TaskConfig:
     PATH_PROJECTOR_STEP = 0.1
     MAX_RANDOM_ATTEMPTS = 1000
     
-    # Collision handling: security margin for contact pairs
-    # Negative margin allows penetration (contact)
-    CONTACT_MARGIN = -0.01  # Allow 1cm penetration for contact
+    # Collision pair to disable: tool on dispenser surface
+    # These are the joint names for collision filtering
+    TOOL_CONTACT_JOINT = "frame_gripper/root_joint"
+    # Use "universe" for environment/fixed bodies (dispenser is fixed)
+    # HPP maps "universe" to index 0 for collision matrix
+    DISPENSER_CONTACT_JOINT = "universe"
     
-    # Edges where tool is on or transitioning from dispenser
-    PLACEMENT_CONTACT_EDGES = [
+    # Edges where tool-dispenser collision should be disabled
+    PLACEMENT_EDGES = [
         "transit",           # Tool on dispenser, gripper free
         "approach-tool",     # Gripper approaching tool on dispenser
         "move-gripper-away", # Gripper moving away from tool
@@ -118,6 +126,10 @@ class TaskConfig:
         tool_pose_quat = xyzrpy_to_xyzquat(tool_pose_xyzrpy)
         
         cls.TOOL_ON_DISPENSER = tool_pose_quat.tolist()
+        
+        # Tool on surface: same position, used for surface constraint
+        # The Z value defines the contact height on the dispenser
+        cls.TOOL_ON_SURFACE = tool_pose_quat.tolist()
         
         # Tool in air: same x,y but lifted 0.15m in z
         cls.TOOL_IN_AIR = tool_pose_quat.copy()
@@ -152,25 +164,27 @@ def create_transformation_constraints(ps):
     )
     print(f"    ✓ grasp: {TaskConfig.GRIPPER_NAME} -> {TaskConfig.TOOL_NAME}")
     
-    # 2. PLACEMENT constraint: tool on dispenser (z, roll, pitch fixed)
+    # 2. PLACEMENT constraint: tool on dispenser surface
+    # Fixes Z position and all rotations - acts as a surface contact
+    # Tool cannot penetrate because Z is constrained to surface height
     ps.createTransformationConstraint(
         "placement",
         "",  # World frame
         TaskConfig.TOOL_NAME,
         TaskConfig.TOOL_ON_DISPENSER,
-        TaskConfig.PLACEMENT_MASK
+        TaskConfig.PLACEMENT_MASK  # Z, roll, pitch, yaw fixed
     )
-    print(f"    ✓ placement: tool at {TaskConfig.TOOL_ON_DISPENSER[:3]}")
+    print(f"    ✓ placement: tool Z={TaskConfig.TOOL_ON_DISPENSER[2]:.3f} (surface contact)")
     
-    # 3. PLACEMENT/COMPLEMENT: tool can move in x-y, rotate in yaw
+    # 3. PLACEMENT/COMPLEMENT: tool can slide on surface (X, Y free)
     ps.createTransformationConstraint(
         "placement/complement",
         "",
         TaskConfig.TOOL_NAME,
         TaskConfig.TOOL_ON_DISPENSER,
-        TaskConfig.PLACEMENT_COMPLEMENT_MASK
+        TaskConfig.PLACEMENT_COMPLEMENT_MASK  # X, Y free
     )
-    print("    ✓ placement/complement")
+    print("    ✓ placement/complement: X, Y free (sliding on surface)")
     
     # 4. GRIPPER_TOOL_ALIGNED: gripper above tool (all DOF fixed)
     ps.createTransformationConstraint(
@@ -356,22 +370,29 @@ def create_constraint_graph(robot, ps):
     print("    ✓ Set constant right-hand side")
     
     # ========================================================================
-    # Set security margins for placement contacts (BEFORE initialize!)
+    # Set security margins for placement contact (BEFORE initialize!)
     # ========================================================================
-    # When tool is on dispenser, allow contact between frame_gripper and ground
-    # A negative margin allows "collision" (i.e., contact)
-    # NOTE: Must be done before graph.initialize() because setting margins
-    #       invalidates the edges.
+    # The tool rests on the dispenser surface - this is expected contact.
+    # Use negative security margin to allow penetration/contact.
+    # 
+    # NOTE: We use setSecurityMarginForEdge instead of removeCollisionPairFromEdge
+    # because removeCollisionPairFromEdge has a bug - it doesn't handle the 
+    # "universe" joint (index 0) properly and crashes.
+    #
+    # NOTE: Must be done BEFORE graph.initialize() because setting margins
+    # invalidates the edges, requiring re-initialization.
     
-    for edge_name in TaskConfig.PLACEMENT_CONTACT_EDGES:
+    contact_margin = -0.02  # Allow 2cm penetration for contact
+    
+    for edge_name in TaskConfig.PLACEMENT_EDGES:
         graph.setSecurityMarginForEdge(
             edge_name,
-            TaskConfig.TOOL_NAME,
-            "universe",
-            TaskConfig.CONTACT_MARGIN
+            TaskConfig.TOOL_CONTACT_JOINT,
+            TaskConfig.DISPENSER_CONTACT_JOINT,
+            contact_margin
         )
     
-    print("    ✓ Set security margins for placement contacts")
+    print(f"    ✓ Set security margin ({contact_margin}m) for placement edges")
     
     # ========================================================================
     # Initialize graph (AFTER setting security margins!)
@@ -640,7 +661,10 @@ def main(visualize=True, solve=True):
     
     # 1. Setup scene
     planner, robot, ps = setup_scene()
-    
+    joints = robot.jointNames
+    for i, joint in enumerate(joints):
+        rank = robot.rankInConfiguration[joint]
+        print(f'{i:3d}. {joint} (config rank: {rank})')
     # 2. Create constraints
     print("\n2. Creating constraints...")
     create_transformation_constraints(ps)
