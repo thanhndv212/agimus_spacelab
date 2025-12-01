@@ -66,14 +66,59 @@ class InitialConfigurations:
     
     # Object poses in XYZRPY format [x, y, z, roll, pitch, yaw]
     RS1 = [
-        0.46567999999999976,
+        -0.46567999999999976,
         2.0219499999999999,
         -0.34200800000000015,
         1.5707938223931903,
         -3.1415918612707121,
         2.0943948257717535,
     ]
-    
+
+    RS2 = [
+        0.38432000000000011,
+        2.0219489999999993,
+        -0.34200799999999987,
+        1.5707938223931903,
+        -3.1415918612707121,
+        2.0943948257717535,
+    ]
+
+    RS3 = [
+        0.38432000000000011,
+        2.0219489999999993,
+        -0.63200800000000001,
+        1.5707938223931903,
+        -3.1415918612707121,
+        2.0943948257717535,
+    ]
+
+    RS4 = [
+        0.38432000000000011,
+        2.0219489999999993,
+        -0.99423100120426089,
+        1.5707938223931903,
+        -3.1415918612707121,
+        2.0943948257717535,
+    ]
+
+    RS5 = [
+        -0.46567999967380558,
+        2.0133499991226964,
+        -0.99421000142184635,
+        1.4828606077991944,
+        -2.9906356348103711,
+        2.1010496873808218,
+    ]
+
+    RS6 = [
+        -0.46567999999999987,
+        2.0219489999999993,
+        -0.63200800000000001,
+        1.5707938223931903,
+        -3.1415918612707121,
+        2.0943948257717535,
+    ] 
+
     SCREW_DRIVER = [
         0.046500000888612281,
         1.3322769978599074,
@@ -165,8 +210,12 @@ class ManipulationConfig:
     
     # Define all grippers available on the robots
     GRIPPERS = {
-        "ur10_gripper": "spacelab/gripper",
-        "vispa_gripper": "spacelab/gripper",
+        "ur10_gripper": "spacelab/g_ur10_tool",
+        "vispa_gripper": "spacelab/g_vispa_tool",
+        "vispa2_gripper": "spacelab/g_vispa2_wb1",
+        "frame_gripper": "frame_gripper/h_FG_part",
+        "screw_driver": "screw_driver/g_SD_part",
+
     }
     
     # Define all objects and their handles
@@ -174,7 +223,6 @@ class ManipulationConfig:
         "frame_gripper": {
             "handles": [
                 "frame_gripper/h_FG_tool",
-                "frame_gripper/h_FG_side"
             ],
             "contact_surfaces": [],
         },
@@ -182,12 +230,58 @@ class ManipulationConfig:
             "handles": ["screw_driver/h_SD_tool"],
             "contact_surfaces": [],
         },
-        "cleat_gripper": {
-            "handles": ["cleat_gripper/h_CG_tool"],
+        "RS1": {
+            "handles": ["RS1/h_RS1_FG", 
+                        "RS1/h_RS1_WB",
+                        "RS1/h_RS1_CON0",
+                        "RS1/h_RS1_CON1",
+                        "RS1/h_RS1_CON2",
+                        "RS1/h_RS1_CON3"],
             "contact_surfaces": [],
         },
-        "RS1": {
-            "handles": ["RS1/h_RS_top", "RS1/h_RS_front"],
+        "RS2": {
+            "handles": ["RS2/h_RS2_FG", 
+                        "RS2/h_RS2_WB",
+                        "RS2/h_RS2_CON0",
+                        "RS2/h_RS2_CON1",
+                        "RS2/h_RS2_CON2",
+                        "RS2/h_RS2_CON3"],
+            "contact_surfaces": [],
+        },
+        "RS3": {
+            "handles": ["RS3/h_RS3_FG", 
+                        "RS3/h_RS3_WB",
+                        "RS3/h_RS3_CON0",
+                        "RS3/h_RS3_CON1",
+                        "RS3/h_RS3_CON2",
+                        "RS3/h_RS3_CON3"],
+            "contact_surfaces": [],
+        },
+        "RS4": {
+            "handles": ["RS4/h_RS4_FG", 
+                        "RS4/h_RS4_WB",
+                        "RS4/h_RS4_CON0",
+                        "RS4/h_RS4_CON1",
+                        "RS4/h_RS4_CON2",
+                        "RS4/h_RS4_CON3"],
+            "contact_surfaces": [],
+        },
+        "RS5": {
+            "handles": ["RS5/h_RS5_FG", 
+                        "RS5/h_RS5_WB",
+                        "RS5/h_RS5_CON0",
+                        "RS5/h_RS5_CON1",
+                        "RS5/h_RS5_CON2",
+                        "RS5/h_RS5_CON3"],
+            "contact_surfaces": [],
+        },
+        "RS6": {
+            "handles": ["RS6/h_RS6_FG", 
+                        "RS6/h_RS6_WB",
+                        "RS6/h_RS6_CON0",
+                        "RS6/h_RS6_CON1",
+                        "RS6/h_RS6_CON2",
+                        "RS6/h_RS6_CON3"],
             "contact_surfaces": [],
         },
     }
@@ -197,13 +291,53 @@ class ManipulationConfig:
         "ur10_gripper": [
             "frame_gripper/h_FG_tool",
             "screw_driver/h_SD_tool",
-            "RS1/h_RS_top",
         ],
         "vispa_gripper": [
-            "cleat_gripper/h_CG_tool",
-            "RS1/h_RS_front",
-            "frame_gripper/h_FG_side",
+            "frame_gripper/h_FG_tool",
+            "screw_driver/h_SD_tool",
         ],
+        "vispa2_gripper": [
+            "RS1/h_RS1_WB",
+            "RS2/h_RS2_WB",
+            "RS3/h_RS3_WB",
+            "RS4/h_RS4_WB",
+            "RS5/h_RS5_WB",
+            "RS6/h_RS6_WB",
+        ],
+        "frame_gripper": [
+            "RS1/h_RS1_FG",
+            "RS2/h_RS2_FG",
+            "RS3/h_RS3_FG",
+            "RS4/h_RS4_FG",
+            "RS5/h_RS5_FG",
+            "RS6/h_RS6_FG",
+        ],
+        "screw_driver": [
+            "RS1/h_RS1_CON0",
+            "RS1/h_RS1_CON1",
+            "RS1/h_RS1_CON2",
+            "RS1/h_RS1_CON3",
+            "RS2/h_RS2_CON0",
+            "RS2/h_RS2_CON1",
+            "RS2/h_RS2_CON2",
+            "RS2/h_RS2_CON3",
+            "RS3/h_RS3_CON0",
+            "RS3/h_RS3_CON1",
+            "RS3/h_RS3_CON2",
+            "RS3/h_RS3_CON3",
+            "RS4/h_RS4_CON0",
+            "RS4/h_RS4_CON1",
+            "RS4/h_RS4_CON2",
+            "RS4/h_RS4_CON3",
+            "RS5/h_RS5_CON0",
+            "RS5/h_RS5_CON1",
+            "RS5/h_RS5_CON2",
+            "RS5/h_RS5_CON3",
+            "RS6/h_RS6_CON0",
+            "RS6/h_RS6_CON1",
+            "RS6/h_RS6_CON2",
+            "RS6/h_RS6_CON3",
+        ]
     }
     
     # Environment contact surfaces
