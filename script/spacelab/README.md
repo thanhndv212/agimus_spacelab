@@ -5,6 +5,7 @@ Multi-arm collaborative manipulation framework for SpaceLab assembly tasks using
 ## Table of Contents
 
 - [Overview](#overview)
+- [Backend Support](#backend-support)
 - [Architecture](#architecture)
 - [Components](#components)
 - [Multi-Arm Collaboration](#multi-arm-collaboration)
@@ -29,7 +30,73 @@ This framework enables UR10 and VISPA robots to collaboratively assemble RS modu
 ✅ Fluent APIs for scene setup and constraint creation  
 ✅ Task orchestration with resource conflict resolution  
 ✅ Multi-arm coordination framework  
+✅ **Dual backend support: CORBA and PyHPP**  
 ✅ Scene visualization tools  
+
+---
+
+## Backend Support
+
+The framework supports **two motion planning backends** with a unified interface:
+
+### CORBA Backend (Default)
+- **Mature**: Production-ready with extensive testing
+- **Features**: Full collision management, security margins, path optimization
+- **Use when**: Stability and feature completeness are priorities
+
+### PyHPP Backend
+- **Modern**: Direct Python bindings to HPP C++ libraries
+- **Features**: Better performance, direct Pinocchio integration, dichotomy validation
+- **Use when**: Performance and tight integration with Pinocchio are needed
+
+### Switching Backends
+
+**Task Level:**
+```python
+# CORBA backend (default)
+task = GraspFrameGripperTask(backend="corba")
+
+# PyHPP backend
+task = GraspFrameGripperTask(backend="pyhpp")
+```
+
+**Command Line:**
+```bash
+# Run with CORBA
+python task_grasp_frame_gripper.py --backend corba
+
+# Run with PyHPP
+python task_grasp_frame_gripper.py --backend pyhpp
+```
+
+**Scene Builder:**
+```python
+from spacelab_tools import SpaceLabSceneBuilder
+
+# CORBA
+builder = SpaceLabSceneBuilder(backend="corba")
+planner, robot, ps = builder.build(objects=["frame_gripper"])
+
+# PyHPP
+builder = SpaceLabSceneBuilder(backend="pyhpp")
+planner, robot, ps = builder.build(objects=["frame_gripper"])
+```
+
+### Backend Comparison
+
+| Feature | CORBA | PyHPP |
+|---------|-------|-------|
+| **Maturity** | ✅ Stable | 🔄 Evolving |
+| **Performance** | ⚡ Good | ⚡⚡ Excellent |
+| **Collision Management** | ✅ Full support | ⚠️ Partial |
+| **Path Optimization** | ✅ Multiple methods | ✅ Progressive |
+| **Pinocchio Integration** | ➡️ Via bridge | ✅ Direct |
+| **Python API** | 🔌 CORBA RPC | 🐍 Native bindings |
+| **Learning Curve** | 📚 Moderate | 📚 Lower |
+
+**💡 Tip:** Start with CORBA for stability, switch to PyHPP for performance-critical applications.
+
+See [BACKEND_INTEGRATION.md](BACKEND_INTEGRATION.md) for detailed migration guide and API reference.
 
 ---
 
@@ -125,29 +192,36 @@ Reusable components for building manipulation tasks.
 
 #### **SpaceLabSceneBuilder**
 
-Fluent API for scene setup:
+Fluent API for scene setup with dual backend support:
 
 ```python
 from spacelab_tools import SpaceLabSceneBuilder
 
-# Quick setup
-scene_builder = SpaceLabSceneBuilder()
+# Quick setup (auto-detects or specify backend)
+scene_builder = SpaceLabSceneBuilder(backend="corba")  # or "pyhpp"
 planner, robot, ps = scene_builder.build(
     objects=["frame_gripper", "RS1"],
     validation_step=0.01
 )
 
-# Step-by-step setup
-scene_builder = (SpaceLabSceneBuilder()
+# Step-by-step setup (same API for both backends)
+scene_builder = (SpaceLabSceneBuilder(backend="pyhpp")
     .load_robot()
     .load_environment()
     .load_objects(["frame_gripper", "RS1"])
     .set_joint_bounds()
-    .setup_collision_pairs()
     .configure_path_validation(0.01, 0.1))
 
 planner, robot, ps = scene_builder.get_instances()
 ```
+
+**Backend-agnostic methods:**
+- `load_robot()` - Loads robot model
+- `load_environment()` - Loads environment
+- `load_objects()` - Loads manipulatable objects
+- `set_joint_bounds()` - Sets joint limits
+- `configure_path_validation()` - Configures validation parameters
+- `get_instances()` - Returns (planner, robot, ps/problem)
 
 #### **ConstraintBuilder**
 
@@ -174,17 +248,18 @@ ConstraintBuilder.create_complement_constraint(
 
 #### **ConfigurationGenerator**
 
-Manages configuration generation and projection:
+Manages configuration generation and projection (works with both backends):
 
 ```python
 from spacelab_tools import ConfigurationGenerator
 
-config_gen = ConfigurationGenerator(robot, graph, ps, max_attempts=1000)
+# Backend is automatically detected from graph type
+config_gen = ConfigurationGenerator(robot, graph, ps, backend="corba")
 
 # Project onto constraint graph node
 config_gen.project_on_node("placement", q_init, config_label="q_init")
 
-# Generate configuration via edge
+# Generate configuration via edge (same API for both backends)
 success, q_target = config_gen.generate_via_edge(
     "approach-tool", q_from, config_label="q_approach"
 )
@@ -197,26 +272,36 @@ q_new = config_gen.modify_object_pose(
 
 #### **ManipulationTask** (Base Class)
 
-Abstract base for task implementation:
+Abstract base for task implementation with backend support:
 
 ```python
 from spacelab_tools import ManipulationTask
 
 class MyTask(ManipulationTask):
+    def __init__(self, backend="corba"):
+        super().__init__("My Task", backend=backend)
+    
     def get_objects(self) -> List[str]:
         return ["frame_gripper"]
         
     def create_constraints(self) -> None:
         # Create constraints using ConstraintBuilder
+        # Same code for both backends!
         pass
         
     def create_graph(self) -> ConstraintGraph:
         # Build constraint graph
+        # Backend-specific graph types handled internally
         pass
         
     def generate_configurations(self, q_init) -> Dict:
         # Generate waypoint configs using ConfigurationGenerator
+        # Unified API for both backends
         pass
+
+# Usage with either backend
+task_corba = MyTask(backend="corba")
+task_pyhpp = MyTask(backend="pyhpp")
 ```
 
 ---
@@ -378,6 +463,10 @@ python task_grasp_frame_gripper.py --solve
 
 # Without visualization
 python task_grasp_frame_gripper.py --no-viz --solve
+
+# Switch backends
+python task_grasp_frame_gripper.py --backend pyhpp
+python task_grasp_frame_gripper.py --backend corba --solve
 ```
 
 #### 3. Run Multi-Arm Example
@@ -401,20 +490,21 @@ from spacelab_tools import ManipulationTask, SpaceLabSceneBuilder
 from spacelab_tools import ConstraintBuilder, ConfigurationGenerator
 
 class GraspRS1Task(ManipulationTask):
-    def __init__(self):
-        super().__init__("Grasp RS1")
+    def __init__(self, backend="corba"):
+        super().__init__("Grasp RS1", backend=backend)
         
     def get_objects(self):
         return ["RS1"]
         
     def create_constraints(self):
-        # Use ConstraintBuilder
+        # Use ConstraintBuilder (backend-agnostic)
         ConstraintBuilder.create_grasp_constraint(
             self.ps, "grasp", "spacelab/ur10_joint_6_7", 
             "RS1/root_joint", self.grasp_transform, self.mask
         )
         
     def create_graph(self):
+        # Graph creation (CORBA syntax shown, PyHPP similar)
         graph = ConstraintGraph(self.robot, "graph")
         graph.createNode(["free", "grasp"])
         graph.createEdge("free", "grasp", "pick", weight=1)
@@ -427,9 +517,14 @@ class GraspRS1Task(ManipulationTask):
         )
         return self.config_gen.configs
 
-# Run task
+# Run task with either backend
 if __name__ == "__main__":
-    task = GraspRS1Task()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--backend", default="corba", choices=["corba", "pyhpp"])
+    args = parser.parse_args()
+    
+    task = GraspRS1Task(backend=args.backend)
     task.setup()
     task.run(visualize=True, solve=False)
 ```
@@ -545,6 +640,7 @@ t_collab = (TaskBuilder("collab", "Assembly")
 ✅ **Readability**: High-level task logic clear  
 ✅ **Extensibility**: Easy to add features  
 ✅ **Collaboration**: Multi-arm orchestration  
+✅ **Flexibility**: Dual backend support (CORBA/PyHPP)  
 
 ---
 
@@ -660,6 +756,8 @@ Total time: 251.84s
 - [HPP Documentation](https://humanoid-path-planner.github.io/hpp-doc/)
 - [Pinocchio](https://stack-of-tasks.github.io/pinocchio/)
 - [Gepetto Viewer](https://github.com/Gepetto/gepetto-viewer)
+- [Backend Integration Guide](BACKEND_INTEGRATION.md) - Detailed backend comparison and migration
+- [agimus_spacelab Package](../../src/agimus_spacelab/) - Unified planner implementations
 
 ---
 

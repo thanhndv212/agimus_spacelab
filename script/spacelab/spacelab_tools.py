@@ -25,15 +25,33 @@ from spacelab_config import (
     ManipulationConfig,
 )
 
-from agimus_spacelab.corba import CorbaManipulationPlanner
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
+# Import unified planner interfaces
 try:
-    from hpp.corbaserver.manipulation import ConstraintGraph, Constraints
-    from hpp.corbaserver import Client
-    HAS_CORBA = True
+    from agimus_spacelab.corba import (
+        CorbaManipulationPlanner,
+        HAS_CORBA,
+    )
 except ImportError:
     HAS_CORBA = False
+    CorbaManipulationPlanner = None
+
+try:
+    from agimus_spacelab.pyhpp import (
+        PyHPPManipulationPlanner,
+        HAS_PYHPP,
+    )
+except ImportError:
+    HAS_PYHPP = False
+    PyHPPManipulationPlanner = None
+
+# Import ConstraintGraph for type hints (CORBA only)
+try:
+    from hpp.corbaserver.manipulation import ConstraintGraph, Constraints
+except ImportError:
+    ConstraintGraph = None
+    Constraints = None
 
 
 # ============================================================================
@@ -65,26 +83,47 @@ class SpaceLabSceneBuilder:
         }
     }
     
-    def __init__(self, planner: Optional[CorbaManipulationPlanner] = None):
+    def __init__(self, planner: Optional[Any] = None,
+                 backend: str = "corba"):
         """
         Initialize scene builder.
         
         Args:
             planner: Existing planner instance, or None to create new one
+            backend: "corba" or "pyhpp" - which backend to use
         """
-        self.planner = planner or CorbaManipulationPlanner()
+        self.backend = backend.lower()
         self.loaded_objects = []
         
-    def load_robot(self, composite_name: str = "spacelab", 
+        if self.backend == "corba":
+            if not HAS_CORBA:
+                raise ImportError("CORBA backend not available")
+            self.planner = planner or CorbaManipulationPlanner()
+        elif self.backend == "pyhpp":
+            if not HAS_PYHPP:
+                raise ImportError("PyHPP backend not available")
+            self.planner = planner or PyHPPManipulationPlanner()
+        else:
+            raise ValueError(f"Unknown backend: {backend}. Use 'corba' or 'pyhpp'")
+        
+    def load_robot(self, composite_name: str = "spacelab",
                    robot_name: str = "spacelab") -> 'SpaceLabSceneBuilder':
         """Load the composite robot (UR10 + VISPA)."""
         print("   Loading robot...")
-        self.planner.load_robot(
-            composite_name=composite_name,
-            robot_name=robot_name,
-            urdf_path=self.DEFAULT_PATHS["robot_urdf"],
-            srdf_path=self.DEFAULT_PATHS["robot_srdf"],
-        )
+        if self.backend == "corba":
+            self.planner.load_robot(
+                composite_name=composite_name,
+                robot_name=robot_name,
+                urdf_path=self.DEFAULT_PATHS["robot_urdf"],
+                srdf_path=self.DEFAULT_PATHS["robot_srdf"],
+            )
+        else:  # pyhpp
+            self.planner.load_robot(
+                name=robot_name,
+                urdf_path=self.DEFAULT_PATHS["robot_urdf"],
+                srdf_path=self.DEFAULT_PATHS["robot_srdf"],
+                root_joint_type="anchor"
+            )
         return self
         
     def load_environment(self, name: str = "ground_demo") -> 'SpaceLabSceneBuilder':
@@ -101,17 +140,17 @@ class SpaceLabSceneBuilder:
         Load multiple objects.
         
         Args:
-            object_names: List of object names to load (e.g., ["frame_gripper", "RS1"])
+            object_names: List of object names to load
         """
         print(f"   Loading {len(object_names)} object(s)...")
         for obj_name in object_names:
             if obj_name not in self.DEFAULT_PATHS["objects"]:
                 print(f"      ⚠ Unknown object: {obj_name}")
                 continue
-                
+            
             self.planner.load_object(
-                obj_name, 
-                self.DEFAULT_PATHS["objects"][obj_name],
+                name=obj_name,
+                urdf_path=self.DEFAULT_PATHS["objects"][obj_name],
                 root_joint_type="freeflyer"
             )
             self.loaded_objects.append(obj_name)
@@ -129,17 +168,22 @@ class SpaceLabSceneBuilder:
             
         return self
         
-    def configure_path_validation(self, 
+    def configure_path_validation(self,
                                    validation_step: float = 0.01,
                                    projector_step: float = 0.1) -> 'SpaceLabSceneBuilder':
         """Configure path validation parameters."""
         print("   Configuring path validation...")
-        ps = self.planner.get_problem_solver()
-        ps.selectPathValidation("Discretized", validation_step)
-        ps.selectPathProjector("Progressive", projector_step)
+        if self.backend == "corba":
+            ps = self.planner.get_problem_solver()
+            ps.selectPathValidation("Discretized", validation_step)
+            ps.selectPathProjector("Progressive", projector_step)
+        else:  # pyhpp
+            # PyHPP uses dichotomy and progressive projector
+            self.planner.set_dichotomy(True)
+            self.planner.set_progressive_projector(True)
         return self
         
-    def disable_collision_pair(self, 
+    def disable_collision_pair(self,
                                obstacle_name: str,
                                joint_name: str,
                                remove_collision: bool = True,
@@ -154,13 +198,18 @@ class SpaceLabSceneBuilder:
             remove_distance: Remove from distance checking
         """
         print(f"   Disabling collision: {obstacle_name} <-> {joint_name}")
-        ps = self.planner.get_problem_solver()
-        ps.removeObstacleFromJoint(
-            obstacle_name,
-            joint_name,
-            remove_collision,
-            remove_distance
-        )
+        if self.backend == "corba":
+            ps = self.planner.get_problem_solver()
+            ps.removeObstacleFromJoint(
+                obstacle_name,
+                joint_name,
+                remove_collision,
+                remove_distance
+            )
+        else:
+            # PyHPP collision management is handled differently
+            # Would need to use device collision pairs API
+            print("      (PyHPP: collision management not yet implemented)")
         return self
         
     def get_instances(self) -> Tuple[Any, Any, Any]:
@@ -168,10 +217,13 @@ class SpaceLabSceneBuilder:
         Get planner, robot, and problem solver instances.
         
         Returns:
-            Tuple of (planner, robot, ps)
+            Tuple of (planner, robot, ps/problem)
         """
         robot = self.planner.get_robot()
-        ps = self.planner.get_problem_solver()
+        if self.backend == "corba":
+            ps = self.planner.get_problem_solver()
+        else:  # pyhpp
+            ps = self.planner.get_problem()
         return self.planner, robot, ps
         
     def build(self, 
@@ -271,19 +323,22 @@ class ConfigurationGenerator:
     Handles projection, random sampling, and waypoint generation.
     """
     
-    def __init__(self, robot, graph, ps, max_attempts: int = 1000):
+    def __init__(self, robot, graph, ps, backend: str = "corba",
+                 max_attempts: int = 1000):
         """
         Initialize configuration generator.
         
         Args:
             robot: Robot instance
-            graph: ConstraintGraph instance
-            ps: ProblemSolver instance
+            graph: ConstraintGraph or Graph instance
+            ps: ProblemSolver or Problem instance
+            backend: "corba" or "pyhpp"
             max_attempts: Maximum random sampling attempts
         """
         self.robot = robot
         self.graph = graph
         self.ps = ps
+        self.backend = backend.lower()
         self.max_attempts = max_attempts
         self.configs = {}
         
@@ -300,7 +355,10 @@ class ConfigurationGenerator:
         Returns:
             Tuple of (success, projected_config)
         """
-        res, q_proj, err = self.graph.applyNodeConstraints(node_name, list(q))
+        if self.backend == "corba":
+            res, q_proj, err = self.graph.applyNodeConstraints(node_name, list(q))
+        else:  # pyhpp
+            res, q_proj, err = self.graph.applyConstraints(node_name, list(q))
         
         if config_label:
             if res:
@@ -328,7 +386,15 @@ class ConfigurationGenerator:
             Tuple of (success, generated_config or None)
         """
         for i in range(self.max_attempts):
-            q_rand = self.robot.shootRandomConfig()
+            # Generate random config - API is same for both backends
+            if self.backend == "corba":
+                q_rand = self.robot.shootRandomConfig()
+            else:  # pyhpp
+                import numpy as np
+                q_rand = self.robot.randomConfiguration()
+                if isinstance(q_rand, np.ndarray):
+                    q_rand = q_rand.tolist()
+            
             res, q_target, err = self.graph.generateTargetConfig(
                 edge_name, q_from, q_rand
             )
@@ -439,15 +505,17 @@ class ManipulationTask:
     graph building, and configuration management.
     """
     
-    def __init__(self, task_name: str):
+    def __init__(self, task_name: str, backend: str = "corba"):
         """
         Initialize manipulation task.
         
         Args:
             task_name: Descriptive name for the task
+            backend: "corba" or "pyhpp" - which backend to use
         """
         self.task_name = task_name
-        self.scene_builder = SpaceLabSceneBuilder()
+        self.backend = backend.lower()
+        self.scene_builder = SpaceLabSceneBuilder(backend=backend)
         self.planner = None
         self.robot = None
         self.ps = None
@@ -531,7 +599,7 @@ class ManipulationTask:
         
         # 5. Initialize configuration generator
         self.config_gen = ConfigurationGenerator(
-            self.robot, self.graph, self.ps
+            self.robot, self.graph, self.ps, backend=self.backend
         )
         
         print("\n   ✓ Task setup complete")

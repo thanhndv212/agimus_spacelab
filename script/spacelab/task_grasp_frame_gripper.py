@@ -37,6 +37,18 @@ sys.path.insert(0, str(config_dir))
 from spacelab_config import InitialConfigurations
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
+# Import backend availability flags for validation
+try:
+    from agimus_spacelab.corba import HAS_CORBA
+except ImportError:
+    HAS_CORBA = False
+
+try:
+    from agimus_spacelab.pyhpp import HAS_PYHPP
+except ImportError:
+    HAS_PYHPP = False
+
+# CORBA-specific imports for manual graph building (when not using factory)
 try:
     from hpp.corbaserver.manipulation import (
         ConstraintGraph,
@@ -44,12 +56,11 @@ try:
         Constraints,
         Rule,
     )
-    from hpp.corbaserver import Client
-    Client().problem.resetProblem()
-    HAS_CORBA = True
 except ImportError:
-    HAS_CORBA = False
-    print("Warning: CORBA backend not available")
+    ConstraintGraph = None
+    ConstraintGraphFactory = None
+    Constraints = None
+    Rule = None
 
 
 # ============================================================================
@@ -128,17 +139,43 @@ GraspFrameGripperConfig.init_poses()
 class GraspFrameGripperTask(ManipulationTask):
     """UR10 grasps frame_gripper from dispenser."""
     
-    def __init__(self, use_factory: bool = False):
+    def __init__(self, use_factory: bool = False, backend: str = "corba"):
         """
         Initialize task.
         
         Args:
             use_factory: If True, use ConstraintGraphFactory for automatic
                         graph generation. If False, build graph manually.
+            backend: "corba" or "pyhpp" - which backend to use
         """
-        super().__init__("Spacelab Manipulation: UR10 Grasps Frame Gripper")
+        super().__init__(
+            "Spacelab Manipulation: UR10 Grasps Frame Gripper",
+            backend=backend
+        )
         self.config = GraspFrameGripperConfig
         self.use_factory = use_factory
+        
+        # PyHPP constraint creation not yet implemented
+        if self.backend == "pyhpp":
+            raise NotImplementedError(
+                "PyHPP backend not yet fully implemented for this task. "
+                "PyHPP requires different constraint creation APIs "
+                "(pyhpp.constraints.Transformation, "
+                "RelativeTransformation, etc.) "
+                "and graph building approach. "
+                "\n\nFor now, please use CORBA backend: "
+                "\n  python task_grasp_frame_gripper.py --backend corba"
+                "\n  python task_grasp_frame_gripper.py "
+                "--backend corba --factory"
+            )
+        
+        # Validate CORBA-specific imports for manual graph building
+        if self.backend == "corba" and not self.use_factory:
+            if ConstraintGraph is None:
+                raise ImportError(
+                    "CORBA graph classes not available. "
+                    "Either use --factory mode or install hpp.corbaserver"
+                )
         
     def get_objects(self) -> List[str]:
         """Only need frame_gripper for this task."""
@@ -155,6 +192,11 @@ class GraspFrameGripperTask(ManipulationTask):
         
     def create_constraints(self) -> None:
         """Create all transformation constraints."""
+        # Factory mode creates constraints automatically
+        if self.use_factory:
+            print("    (Factory mode: constraints created automatically)")
+            return
+            
         cb = ConstraintBuilder
         cfg = self.config
         
@@ -200,16 +242,24 @@ class GraspFrameGripperTask(ManipulationTask):
             cfg.PLACEMENT_COMPLEMENT_MASK
         )
         
-    def create_graph(self) -> ConstraintGraph:
+    def create_graph(self):
         """Create and configure constraint graph."""
         if self.use_factory:
             return self._create_graph_with_factory()
         else:
             return self._create_graph_manual()
     
-    def _create_graph_with_factory(self) -> ConstraintGraph:
+    def _create_graph_with_factory(self):
         """Create graph using ConstraintGraphFactory (automatic)."""
-        print("    Using ConstraintGraphFactory for automatic graph generation")
+        print(
+            "    Using ConstraintGraphFactory for automatic graph generation"
+        )
+        
+        if self.backend != "corba":
+            raise NotImplementedError(
+                "ConstraintGraphFactory only available with CORBA backend. "
+                "Use manual graph building (remove --factory flag) for PyHPP."
+            )
         
         graph = ConstraintGraph(self.robot, "graph")
         factory = ConstraintGraphFactory(graph)
@@ -223,7 +273,9 @@ class GraspFrameGripperTask(ManipulationTask):
         objects = ["frame_gripper"]
         handles_per_object = [["frame_gripper/h_FG_tool"]]
         contact_surfaces_per_object = [[]]  # No contact surfaces for now
-        factory.setObjects(objects, handles_per_object, contact_surfaces_per_object)
+        factory.setObjects(
+            objects, handles_per_object, contact_surfaces_per_object
+        )
         print(f"    ✓ Set objects: {objects}")
         
         # Set environment contacts (dispenser surface)
@@ -240,17 +292,29 @@ class GraspFrameGripperTask(ManipulationTask):
         factory.generate()
         print("    ✓ Generated graph structure")
         
-        # Set security margins for placement edges
-        cfg = self.config
-        # Factory creates edges, we need to set margins after generation
+        # Initialize graph (factory creates edges automatically)
         graph.initialize()
         print("    ✓ Graph initialized")
         
+        # Print factory-generated nodes for reference
+        print(f"    ℹ Factory created {len(graph.nodes)} nodes:")
+        for node_name in list(graph.nodes.keys())[:5]:  # Show first 5
+            print(f"      - {node_name}")
+        if len(graph.nodes) > 5:
+            print(f"      ... and {len(graph.nodes) - 5} more")
+        
         return graph
     
-    def _create_graph_manual(self) -> ConstraintGraph:
+    def _create_graph_manual(self):
         """Create graph manually (original implementation)."""
         print("    Building graph manually")
+        
+        if self.backend != "corba":
+            raise NotImplementedError(
+                "Manual graph building currently only implemented for "
+                "CORBA backend. For PyHPP, please implement PyHPP graph "
+                "creation or use agimus_spacelab planners."
+            )
         
         graph = ConstraintGraph(self.robot, "graph")
         cfg = self.config
@@ -279,7 +343,10 @@ class GraspFrameGripperTask(ManipulationTask):
         
         # Set security margins BEFORE initialize
         self._set_security_margins(graph)
-        print(f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) for placement edges")
+        print(
+            f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
+            "for placement edges"
+        )
         
         # Initialize graph
         graph.initialize()
@@ -290,26 +357,48 @@ class GraspFrameGripperTask(ManipulationTask):
     def _create_edges(self, graph):
         """Create all state transitions."""
         # Self-loops
-        graph.createEdge('placement', 'placement', 'transit', 1, 'placement')
+        graph.createEdge(
+            'placement', 'placement', 'transit', 1, 'placement'
+        )
         graph.createEdge('grasp', 'grasp', 'transfer', 1, 'grasp')
         
         # From placement
-        graph.createEdge('placement', 'gripper-above-tool', 'approach-tool', 1, 'placement')
+        graph.createEdge(
+            'placement', 'gripper-above-tool', 'approach-tool',
+            1, 'placement'
+        )
         
         # From gripper-above-tool
-        graph.createEdge('gripper-above-tool', 'placement', 'move-gripper-away', 1, 'placement')
-        graph.createEdge('gripper-above-tool', 'grasp-placement', 'grasp-tool', 1, 'placement')
+        graph.createEdge(
+            'gripper-above-tool', 'placement', 'move-gripper-away',
+            1, 'placement'
+        )
+        graph.createEdge(
+            'gripper-above-tool', 'grasp-placement', 'grasp-tool',
+            1, 'placement'
+        )
         
         # From grasp-placement
-        graph.createEdge('grasp-placement', 'gripper-above-tool', 'release-tool', 1, 'placement')
-        graph.createEdge('grasp-placement', 'tool-in-air', 'lift-tool', 1, 'grasp')
+        graph.createEdge(
+            'grasp-placement', 'gripper-above-tool', 'release-tool',
+            1, 'placement'
+        )
+        graph.createEdge(
+            'grasp-placement', 'tool-in-air', 'lift-tool', 1, 'grasp'
+        )
         
         # From tool-in-air
-        graph.createEdge('tool-in-air', 'grasp-placement', 'lower-tool', 1, 'grasp')
-        graph.createEdge('tool-in-air', 'grasp', 'move-tool-away', 1, 'grasp')
+        graph.createEdge(
+            'tool-in-air', 'grasp-placement', 'lower-tool', 1, 'grasp'
+        )
+        graph.createEdge(
+            'tool-in-air', 'grasp', 'move-tool-away', 1, 'grasp'
+        )
         
         # From grasp
-        graph.createEdge('grasp', 'tool-in-air', 'approach-dispenser', 1, 'grasp')
+        graph.createEdge(
+            'grasp', 'tool-in-air', 'approach-dispenser', 1, 'grasp'
+        )
         
     def _assign_node_constraints(self, graph):
         """Assign constraints to states."""
@@ -320,7 +409,9 @@ class GraspFrameGripperTask(ManipulationTask):
         
         graph.addConstraints(
             node="gripper-above-tool",
-            constraints=Constraints(numConstraints=["placement", "gripper_tool_aligned"])
+            constraints=Constraints(
+                numConstraints=["placement", "gripper_tool_aligned"]
+            )
         )
         
         graph.addConstraints(
@@ -341,17 +432,25 @@ class GraspFrameGripperTask(ManipulationTask):
     def _assign_edge_constraints(self, graph):
         """Assign path constraints to edges."""
         # Edges with placement/complement (tool on surface)
-        for edge in ["transit", "approach-tool", "move-gripper-away", "grasp-tool", "release-tool"]:
+        placement_edges = [
+            "transit", "approach-tool", "move-gripper-away",
+            "grasp-tool", "release-tool"
+        ]
+        for edge in placement_edges:
             graph.addConstraints(
                 edge=edge,
-                constraints=Constraints(numConstraints=["placement/complement"])
+                constraints=Constraints(
+                    numConstraints=["placement/complement"]
+                )
             )
             
         # Edges with tool_in_air/complement
         for edge in ["lift-tool", "lower-tool"]:
             graph.addConstraints(
                 edge=edge,
-                constraints=Constraints(numConstraints=["tool_in_air/complement"])
+                constraints=Constraints(
+                    numConstraints=["tool_in_air/complement"]
+                )
             )
             
         # Free motion edges
@@ -369,8 +468,17 @@ class GraspFrameGripperTask(ManipulationTask):
                 cfg.CONTACT_MARGIN
             )
             
-    def generate_configurations(self, q_init: List[float]) -> Dict[str, List[float]]:
+    def generate_configurations(
+        self, q_init: List[float]
+    ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
+        # Factory mode creates different node/edge names
+        # For now, just return initial config for factory mode
+        if self.use_factory:
+            print("    Factory mode: Using initial configuration only")
+            print("    (Detailed waypoint generation not yet implemented)")
+            return {"q_init": q_init}
+        
         cg = self.config_gen
         cfg = self.config
         
@@ -383,27 +491,37 @@ class GraspFrameGripperTask(ManipulationTask):
         
         # 2. Generate approach config
         print("    2. Generating 'approach-tool' config...")
-        res, _ = cg.generate_via_edge("approach-tool", cg.configs["q_init"], "q_approach")
+        res, _ = cg.generate_via_edge(
+            "approach-tool", cg.configs["q_init"], "q_approach"
+        )
         if not res:
             return cg.configs
             
         # 3. Project onto gripper-above-tool
         print("    3. Projecting onto 'gripper-above-tool' state...")
-        cg.project_on_node("gripper-above-tool", cg.configs["q_approach"], "q_above")
+        cg.project_on_node(
+            "gripper-above-tool", cg.configs["q_approach"], "q_above"
+        )
         
         # 4. Generate grasp config
         print("    4. Generating 'grasp-tool' config...")
-        res, _ = cg.generate_via_edge("grasp-tool", cg.configs["q_above"], "q_grasp")
+        res, _ = cg.generate_via_edge(
+            "grasp-tool", cg.configs["q_above"], "q_grasp"
+        )
         if not res:
             return cg.configs
             
         # 5. Project onto grasp-placement
         print("    5. Projecting onto 'grasp-placement' state...")
-        cg.project_on_node("grasp-placement", cg.configs["q_grasp"], "q_grasp_place")
+        cg.project_on_node(
+            "grasp-placement", cg.configs["q_grasp"], "q_grasp_place"
+        )
         
         # 6. Generate lift config
         print("    6. Generating 'lift-tool' config...")
-        res, _ = cg.generate_via_edge("lift-tool", cg.configs["q_grasp_place"], "q_lifted")
+        res, _ = cg.generate_via_edge(
+            "lift-tool", cg.configs["q_grasp_place"], "q_lifted"
+        )
         if not res:
             return cg.configs
             
@@ -427,8 +545,13 @@ class GraspFrameGripperTask(ManipulationTask):
 # Main Execution
 # ============================================================================
 
-def main(visualize: bool = True, solve: bool = False, show_joints: bool = False,
-         use_factory: bool = False):
+def main(
+    visualize: bool = True,
+    solve: bool = False,
+    show_joints: bool = False,
+    use_factory: bool = False,
+    backend: str = "corba"
+):
     """
     Run the grasp frame_gripper task.
     
@@ -436,14 +559,22 @@ def main(visualize: bool = True, solve: bool = False, show_joints: bool = False,
         visualize: Show configurations in viewer
         solve: Attempt to solve planning problem
         show_joints: Print joint information
-        use_factory: Use ConstraintGraphFactory (automatic) instead of manual graph
+        use_factory: Use ConstraintGraphFactory (automatic) instead of
+            manual graph
+        backend: "corba" or "pyhpp" - which backend to use
     """
-    if not HAS_CORBA:
+    # Validate backend availability
+    if backend == "corba" and not HAS_CORBA:
         print("Error: CORBA backend not available")
         return None
+    elif backend == "pyhpp" and not HAS_PYHPP:
+        print("Error: PyHPP backend not available. Install pyhpp.")
+        return None
         
+    print(f"Using backend: {backend.upper()}")
+    
     # Create and setup task
-    task = GraspFrameGripperTask(use_factory=use_factory)
+    task = GraspFrameGripperTask(use_factory=use_factory, backend=backend)
     task.setup(
         validation_step=GraspFrameGripperConfig.PATH_VALIDATION_STEP,
         projector_step=GraspFrameGripperConfig.PATH_PROJECTOR_STEP
@@ -477,7 +608,9 @@ def main(visualize: bool = True, solve: bool = False, show_joints: bool = False,
 
     # Visualize constraint graph
     print("\n📊 Generating constraint graph visualization...")
-    viz_path = visualize_constraint_graph(task.graph, output_path="constraint_graph")
+    viz_path = visualize_constraint_graph(
+        task.graph, output_path="constraint_graph"
+    )
     if viz_path:
         print(f"✓ Graph visualization saved to: {viz_path}")
 
@@ -490,11 +623,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="UR10 grasps frame_gripper from dispenser"
     )
-    parser.add_argument("--no-viz", action="store_true", help="Disable visualization")
-    parser.add_argument("--solve", action="store_true", help="Solve planning problem")
-    parser.add_argument("--show-joints", action="store_true", help="Print joint info")
-    parser.add_argument("--factory", action="store_true",
-                        help="Use ConstraintGraphFactory (automatic graph generation)")
+    parser.add_argument(
+        "--no-viz", action="store_true", help="Disable visualization"
+    )
+    parser.add_argument(
+        "--solve", action="store_true", help="Solve planning problem"
+    )
+    parser.add_argument(
+        "--show-joints", action="store_true", help="Print joint info"
+    )
+    parser.add_argument(
+        "--factory", action="store_true",
+        help="Use ConstraintGraphFactory (automatic graph generation)"
+    )
+    parser.add_argument(
+        "--backend", type=str, default="corba",
+        choices=["corba", "pyhpp"],
+        help="Backend to use: corba (default) or pyhpp"
+    )
     
     args = parser.parse_args()
     
@@ -502,7 +648,8 @@ if __name__ == "__main__":
         visualize=not args.no_viz,
         solve=args.solve,
         show_joints=args.show_joints,
-        use_factory=args.factory
+        use_factory=args.factory,
+        backend=args.backend
     )
     
     if task and result:
