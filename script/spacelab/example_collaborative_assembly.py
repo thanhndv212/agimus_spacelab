@@ -3,18 +3,25 @@
 Example: Multi-arm collaborative assembly of RS modules.
 
 Scenario:
-  1. UR10 picks up frame_gripper from dispenser
-  2. VISPA picks up RS1 from dispenser  
-  3. UR10 (with frame_gripper) grasps RS2
-  4. UR10 transports RS2 to assembly zone
-  5. VISPA moves RS1 to assembly zone
-  6. UR10 and VISPA collaboratively assemble RS1+RS2
+    1. UR10 picks up frame_gripper from dispenser
+    2. UR10 (holding frame_gripper) picks up RS1 from wall-mounted dispenser 
+    3. UR10 (with frame_gripper) moves RS1 to assembly zone 
+    4. UR10 mounts RS1 onto workbench on VISPA2
+
+    5. UR10 picks up RS6 from wall-mounted dispenser
+    6. VISPA picks up screw_driver from dispenser
+    7. UR10 moves RS6 to assembly zone
+    8. VISPA moves screw_driver to assembly zone
+    9. UR10 mounts RS6 onto RS1 while VISPA holds screw_driver to tighten 4 screws
+    
+    10. Repeat {5, 6, 7, 8, 9} for RS modules in order: RS5, RS2, RS3, RS4.
 
 This demonstrates:
 - Parallel task execution (UR10 and VISPA work simultaneously)
 - Resource management (no conflicts)
 - Dependencies (assembly requires both parts ready)
 - Synchronization points (collaborative assembly)
+- Pre- and post-conditions (grasped states, assembly complete)
 """
 
 import sys
