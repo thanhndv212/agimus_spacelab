@@ -27,6 +27,7 @@ from spacelab_tools import (
     ManipulationTask,
     ConstraintBuilder,
     print_joint_info,
+    visualize_constraint_graph,
 )
 
 # Add config directory
@@ -37,7 +38,12 @@ from spacelab_config import InitialConfigurations
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 try:
-    from hpp.corbaserver.manipulation import ConstraintGraph, Constraints
+    from hpp.corbaserver.manipulation import (
+        ConstraintGraph,
+        ConstraintGraphFactory,
+        Constraints,
+        Rule,
+    )
     from hpp.corbaserver import Client
     Client().problem.resetProblem()
     HAS_CORBA = True
@@ -122,9 +128,17 @@ GraspFrameGripperConfig.init_poses()
 class GraspFrameGripperTask(ManipulationTask):
     """UR10 grasps frame_gripper from dispenser."""
     
-    def __init__(self):
+    def __init__(self, use_factory: bool = False):
+        """
+        Initialize task.
+        
+        Args:
+            use_factory: If True, use ConstraintGraphFactory for automatic
+                        graph generation. If False, build graph manually.
+        """
         super().__init__("Spacelab Manipulation: UR10 Grasps Frame Gripper")
         self.config = GraspFrameGripperConfig
+        self.use_factory = use_factory
         
     def get_objects(self) -> List[str]:
         """Only need frame_gripper for this task."""
@@ -188,6 +202,56 @@ class GraspFrameGripperTask(ManipulationTask):
         
     def create_graph(self) -> ConstraintGraph:
         """Create and configure constraint graph."""
+        if self.use_factory:
+            return self._create_graph_with_factory()
+        else:
+            return self._create_graph_manual()
+    
+    def _create_graph_with_factory(self) -> ConstraintGraph:
+        """Create graph using ConstraintGraphFactory (automatic)."""
+        print("    Using ConstraintGraphFactory for automatic graph generation")
+        
+        graph = ConstraintGraph(self.robot, "graph")
+        factory = ConstraintGraphFactory(graph)
+        
+        # Set grippers
+        grippers = ["spacelab/g_ur10_tool"]
+        factory.setGrippers(grippers)
+        print(f"    ✓ Set grippers: {grippers}")
+        
+        # Set objects with handles and contact surfaces
+        objects = ["frame_gripper"]
+        handles_per_object = [["frame_gripper/h_FG_tool"]]
+        contact_surfaces_per_object = [[]]  # No contact surfaces for now
+        factory.setObjects(objects, handles_per_object, contact_surfaces_per_object)
+        print(f"    ✓ Set objects: {objects}")
+        
+        # Set environment contacts (dispenser surface)
+        env_contacts = ["ground_demo/pancake_table_table_top"]
+        factory.environmentContacts(env_contacts)
+        print(f"    ✓ Set environment contacts: {env_contacts}")
+        
+        # Set rules (allow all gripper-handle pairs)
+        rules = [Rule([".*"], [".*"], True)]
+        factory.setRules(rules)
+        print("    ✓ Set rules: allow all")
+        
+        # Generate graph
+        factory.generate()
+        print("    ✓ Generated graph structure")
+        
+        # Set security margins for placement edges
+        cfg = self.config
+        # Factory creates edges, we need to set margins after generation
+        graph.initialize()
+        print("    ✓ Graph initialized")
+        
+        return graph
+    
+    def _create_graph_manual(self) -> ConstraintGraph:
+        """Create graph manually (original implementation)."""
+        print("    Building graph manually")
+        
         graph = ConstraintGraph(self.robot, "graph")
         cfg = self.config
         
@@ -363,7 +427,8 @@ class GraspFrameGripperTask(ManipulationTask):
 # Main Execution
 # ============================================================================
 
-def main(visualize: bool = True, solve: bool = False, show_joints: bool = False):
+def main(visualize: bool = True, solve: bool = False, show_joints: bool = False,
+         use_factory: bool = False):
     """
     Run the grasp frame_gripper task.
     
@@ -371,13 +436,14 @@ def main(visualize: bool = True, solve: bool = False, show_joints: bool = False)
         visualize: Show configurations in viewer
         solve: Attempt to solve planning problem
         show_joints: Print joint information
+        use_factory: Use ConstraintGraphFactory (automatic) instead of manual graph
     """
     if not HAS_CORBA:
         print("Error: CORBA backend not available")
         return None
         
     # Create and setup task
-    task = GraspFrameGripperTask()
+    task = GraspFrameGripperTask(use_factory=use_factory)
     task.setup(
         validation_step=GraspFrameGripperConfig.PATH_VALIDATION_STEP,
         projector_step=GraspFrameGripperConfig.PATH_PROJECTOR_STEP
@@ -394,21 +460,27 @@ def main(visualize: bool = True, solve: bool = False, show_joints: bool = False)
     print("\n" + "=" * 70)
     print("Task Complete!")
     print("=" * 70)
-    
+
     configs = result["configs"]
     print(f"\nGenerated {len(configs)} configurations:")
     for name, q in configs.items():
         print(f"  {name}: {len(q)} DOF")
-        
+
     print("\nTo visualize specific configs:")
     print("  task.planner.visualize(result['configs']['q_init'])")
     print("  task.planner.visualize(result['configs']['q_above'])")
     print("  task.planner.visualize(result['configs']['q_goal'])")
-    
+
     if solve:
         print("\nTo replay path:")
         print("  task.planner.play_path(0)")
-        
+
+    # Visualize constraint graph
+    print("\n📊 Generating constraint graph visualization...")
+    viz_path = visualize_constraint_graph(task.graph, output_path="constraint_graph")
+    if viz_path:
+        print(f"✓ Graph visualization saved to: {viz_path}")
+
     return task, result
 
 
@@ -421,13 +493,16 @@ if __name__ == "__main__":
     parser.add_argument("--no-viz", action="store_true", help="Disable visualization")
     parser.add_argument("--solve", action="store_true", help="Solve planning problem")
     parser.add_argument("--show-joints", action="store_true", help="Print joint info")
+    parser.add_argument("--factory", action="store_true",
+                        help="Use ConstraintGraphFactory (automatic graph generation)")
     
     args = parser.parse_args()
     
     task, result = main(
         visualize=not args.no_viz,
         solve=args.solve,
-        show_joints=args.show_joints
+        show_joints=args.show_joints,
+        use_factory=args.factory
     )
     
     if task and result:
