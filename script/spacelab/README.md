@@ -231,6 +231,7 @@ Multi-arm task coordination framework.
 ```python
 from task_orchestration import AtomicTask, Resource, ResourceType
 
+
 task = AtomicTask(
     task_id="t1",
     name="Grasp RS1",
