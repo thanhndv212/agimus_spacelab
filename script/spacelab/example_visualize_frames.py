@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
 from visualize_frames import (
     displayHandle,
     displayGripper,
-    visualize_handle,
-    visualize_gripper,
+    displayHandleApproach,
+    displayGripperApproach,
     visualize_all_handles,
     visualize_all_grippers,
     print_handle_info,
@@ -134,6 +134,7 @@ def main():
         print("\n7. Visualizing handles with approach arrows...")
         visualize_all_handles(
             viewer, all_handles,
+            show_approach=True,
             frame_color=[0, 0.8, 0, 1],  # Green
             arrow_color=[0, 1, 1, 1],     # Cyan
             axis_length=0.05,
@@ -147,6 +148,7 @@ def main():
         print("\n8. Visualizing grippers with approach arrows...")
         visualize_all_grippers(
             viewer, grippers,
+            show_approach=True,
             frame_color=[1, 0, 0, 1],     # Red
             arrow_color=[1, 0.5, 0, 1],   # Orange
             axis_length=0.05,
@@ -168,7 +170,9 @@ def main():
         print("\nUseful commands:")
         print("  viewer(q_init) - Redisplay configuration")
         print("  displayHandle(viewer, 'object/handle') - Add handle frame")
+        print("  displayHandleApproach(viewer, 'object/handle') - Add approach arrow")
         print("  displayGripper(viewer, 'robot/gripper') - Add gripper frame")
+        print("  displayGripperApproach(viewer, 'robot/gripper') - Add approach arrow")
         print("  clear_all_visualizations(viewer) - Remove all frames")
     else:
         print("\nNote: No handles or grippers were visualized.")
