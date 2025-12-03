@@ -344,9 +344,53 @@ class ManipulationConfig:
     ENV_CONTACTS = ["ground_demo/surface"]
 
 
+class TaskConfigurations:
+    """Task-specific configurations for common manipulation tasks."""
+    
+    # Grasp Frame Gripper Task
+    class GraspFrameGripper:
+        """Configuration for UR10 grasping frame_gripper from dispenser."""
+        
+        # Transform configurations (in xyzquat format)
+        TOOL_IN_GRIPPER = [0.0, 0.0, 0.1, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
+        GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.2, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
+        
+        # Constraint masks (6 DOF: [x, y, z, rx, ry, rz])
+        GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
+        PLACEMENT_MASK = [False, False, True, True, True, True]  # Z + rotations fixed
+        PLACEMENT_COMPLEMENT_MASK = [True, True, False, False, False, False]  # X, Y free
+        
+        # Graph structure
+        GRAPH_NODES = [
+            "grasp",
+            "tool-in-air",
+            "grasp-placement",
+            "gripper-above-tool",
+            "placement",
+        ]
+        
+        # Collision parameters
+        TOOL_CONTACT_JOINT = "frame_gripper/root_joint"
+        DISPENSER_CONTACT_JOINT = "universe"
+        CONTACT_MARGIN = -0.02  # Allow 2cm penetration
+        
+        # Edges requiring surface contact security margins
+        PLACEMENT_EDGES = [
+            "transit", "approach-tool", "move-gripper-away",
+            "grasp-tool", "release-tool", "lift-tool", "lower-tool",
+        ]
+        
+        # Planning parameters
+        PATH_VALIDATION_STEP = 0.01
+        PATH_PROJECTOR_STEP = 0.1
+        MAX_RANDOM_ATTEMPTS = 1000
+        LIFT_HEIGHT = 0.15  # Lift tool 15cm from dispenser
+
+
 __all__ = [
     "RobotJoints",
     "InitialConfigurations",
     "JointBounds",
     "ManipulationConfig",
+    "TaskConfigurations",
 ]

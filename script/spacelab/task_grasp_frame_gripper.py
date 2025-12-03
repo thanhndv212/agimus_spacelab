@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from spacelab_tools import (
     ManipulationTask,
+    GraphBuilder,
     ConstraintBuilder,
     print_joint_info,
     visualize_constraint_graph,
@@ -34,7 +35,7 @@ from spacelab_tools import (
 config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
 
-from spacelab_config import InitialConfigurations
+from spacelab_config import InitialConfigurations, TaskConfigurations
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 # Import backend availability flags for validation
@@ -90,48 +91,12 @@ except ImportError:
 # Task Configuration
 # ============================================================================
 
-class GraspFrameGripperConfig:
+class GraspFrameGripperConfig(TaskConfigurations.GraspFrameGripper):
     """Configuration for UR10 grasping frame_gripper task."""
     
     # Gripper and object names
     GRIPPER_NAME = "spacelab/ur10_joint_6_7"
     TOOL_NAME = "frame_gripper/root_joint"
-    
-    # Grasp transform (tool in gripper frame)
-    TOOL_IN_GRIPPER = [0.0, 0.0, 0.1, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
-    
-    # Pre-grasp transform (gripper above tool)
-    GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.2, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
-    
-    # Constraint masks
-    GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
-    PLACEMENT_MASK = [False, False, True, True, True, True]  # Z + rotations fixed
-    PLACEMENT_COMPLEMENT_MASK = [True, True, False, False, False, False]  # X, Y free
-    
-    # Graph nodes (states)
-    GRAPH_NODES = [
-        "grasp",               # Tool grasped, free motion
-        "tool-in-air",         # Tool grasped and lifted
-        "grasp-placement",     # Tool grasped while on dispenser
-        "gripper-above-tool",  # Gripper aligned above tool
-        "placement",           # Tool on dispenser, gripper free
-    ]
-    
-    # Collision management
-    TOOL_CONTACT_JOINT = "frame_gripper/root_joint"
-    DISPENSER_CONTACT_JOINT = "universe"
-    CONTACT_MARGIN = -0.02  # Allow 2cm penetration for surface contact
-    
-    # Edges with surface contact
-    PLACEMENT_EDGES = [
-        "transit", "approach-tool", "move-gripper-away",
-        "grasp-tool", "release-tool", "lift-tool", "lower-tool",
-    ]
-    
-    # Path planning parameters
-    PATH_VALIDATION_STEP = 0.01
-    PATH_PROJECTOR_STEP = 0.1
-    MAX_RANDOM_ATTEMPTS = 1000
     
     # Tool poses (computed from initial config)
     TOOL_ON_DISPENSER = None
@@ -147,7 +112,7 @@ class GraspFrameGripperConfig:
         
         # Lifted position
         cls.TOOL_IN_AIR = tool_pose_quat.copy()
-        cls.TOOL_IN_AIR[2] += 0.15  # Lift 15cm
+        cls.TOOL_IN_AIR[2] += cls.LIFT_HEIGHT  # Use inherited constant
         cls.TOOL_IN_AIR = cls.TOOL_IN_AIR.tolist()
 
 
