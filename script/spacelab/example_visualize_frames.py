@@ -14,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
 
 from visualize_frames import (
+    displayHandle,
+    displayGripper,
     visualize_handle,
     visualize_gripper,
     visualize_all_handles,
@@ -83,10 +85,7 @@ def main():
     
     # For handles, we need to check which ones are actually defined
     # Try to get handles from the loaded objects
-    potential_handles = []
-    for obj_name in ["frame_gripper", "RS1"]:
-        if obj_name in ManipulationConfig.OBJECTS:
-            potential_handles.extend(ManipulationConfig.OBJECTS[obj_name]["handles"])
+    potential_handles = ["frame_gripper/h_FG_tool"]
     
     # Test which handles actually exist
     print("\nHandles:")
@@ -103,8 +102,6 @@ def main():
     print("\nGrippers:")
     potential_grippers = [
         "spacelab/g_ur10_tool",
-        "spacelab/g_vispa_tool",
-        "spacelab/g_vispa2_wb1"
     ]
     grippers = []
     for gripper in potential_grippers:
@@ -119,35 +116,44 @@ def main():
     if all_handles:
         print("\n5. Detailed handle information:")
         for handle in all_handles[:2]:  # Show first 2
-            print_handle_info(robot, handle)
+            print_handle_info(viewer, handle)
     else:
         print("\n5. No handles available to display")
     
+    # Demonstrate basic display functions (frames only, no arrows)
+    print("\n6. Displaying basic frames (attached to robot)...")
+    if all_handles:
+        print(f"   - Handle: {all_handles[0]}")
+        displayHandle(viewer, all_handles[0])
+    if grippers:
+        print(f"   - Gripper: {grippers[0]}")
+        displayGripper(viewer, grippers[0])
+    
     # Visualize all handles
     if all_handles:
-        print("\n6. Visualizing handles...")
+        print("\n7. Visualizing handles with approach arrows...")
         visualize_all_handles(
-            viewer, robot, q_init, all_handles,
+            viewer, all_handles,
             frame_color=[0, 0.8, 0, 1],  # Green
             arrow_color=[0, 1, 1, 1],     # Cyan
-            frame_scale=0.05,
+            axis_length=0.05,
             arrow_length=0.1
         )
     else:
-        print("\n6. No handles to visualize")
+        print("\n7. No handles to visualize")
     
     # Visualize grippers
     if grippers:
-        print("\n7. Visualizing grippers...")
+        print("\n8. Visualizing grippers with approach arrows...")
         visualize_all_grippers(
-            viewer, robot, q_init, grippers,
+            viewer, grippers,
             frame_color=[1, 0, 0, 1],     # Red
             arrow_color=[1, 0.5, 0, 1],   # Orange
-            frame_scale=0.05,
+            axis_length=0.05,
             arrow_length=0.1
         )
     else:
-        print("\n7. No grippers to visualize")
+        print("\n8. No grippers to visualize")
     
     print("\n" + "=" * 70)
     print("VISUALIZATION COMPLETE")
@@ -159,9 +165,11 @@ def main():
             print("  - Green frames + cyan arrows: Handles")
         if grippers:
             print("  - Red frames + orange arrows: Grippers")
-        print("\nCommands:")
-        print("  viewer(q_init) - Display configuration")
-        print("  clear_all_visualizations(viewer) - Remove frames")
+        print("\nUseful commands:")
+        print("  viewer(q_init) - Redisplay configuration")
+        print("  displayHandle(viewer, 'object/handle') - Add handle frame")
+        print("  displayGripper(viewer, 'robot/gripper') - Add gripper frame")
+        print("  clear_all_visualizations(viewer) - Remove all frames")
     else:
         print("\nNote: No handles or grippers were visualized.")
         print("This may be because they are not defined in the SRDF files.")

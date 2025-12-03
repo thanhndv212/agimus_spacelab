@@ -31,12 +31,21 @@ from spacelab_tools import (
     visualize_constraint_graph,
 )
 
+# Import frame visualization utilities
+try:
+    from visualize_frames import displayHandle, displayGripper
+    HAS_VISUALIZE_FRAMES = True
+except ImportError:
+    HAS_VISUALIZE_FRAMES = False
+    displayHandle = None
+    displayGripper = None
+
 # Add config directory
 config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
 
 from spacelab_config import InitialConfigurations, TaskConfigurations
-from agimus_spacelab.utils import xyzrpy_to_xyzquat
+from agimus_spacelab.utils import xyzrpy_to_xyzquat, xyzquat_to_se3
 
 # Import backend availability flags for validation
 try:
@@ -77,7 +86,7 @@ try:
         ComparisonType,
         Implicit,
     )
-    from pinocchio import SE3, Quaternion, StdVec_Bool as Mask
+    from pinocchio import SE3, StdVec_Bool as Mask
     import numpy as np
 except ImportError:
     Graph = None
@@ -164,116 +173,109 @@ class GraspFrameGripperTask(ManipulationTask):
             remove_distance=False
         )
         
-    def _create_pyhpp_constraints(self) -> Dict:
-        """Create constraints using PyHPP APIs."""
-        constraints = {}
-        robot = self.robot
-        cfg = self.config
+    # def _create_pyhpp_constraints(self) -> Dict:
+    #     """Create constraints using PyHPP APIs."""
+    #     constraints = {}
+    #     robot = self.robot
+    #     cfg = self.config
         
-        # Get joint IDs
-        joint_gripper = robot.model().getJointId(cfg.GRIPPER_NAME)
-        joint_tool = robot.model().getJointId(cfg.TOOL_NAME)
-        Id = SE3.Identity()
+    #     # Get joint IDs
+    #     joint_gripper = robot.model().getJointId(cfg.GRIPPER_NAME)
+    #     joint_tool = robot.model().getJointId(cfg.TOOL_NAME)
+    #     Id = SE3.Identity()
         
-        # Helper to convert [x,y,z,qx,qy,qz,qw] to SE3
-        def pose_to_se3(pose):
-            return SE3(
-                Quaternion(pose[6], pose[3], pose[4], pose[5]),
-                np.array(pose[:3])
-            )
+    #     # 1. Grasp constraint (gripper holds tool)
+    #     grasp_tf = xyzquat_to_se3(cfg.TOOL_IN_GRIPPER)
+    #     mask_grasp = Mask()
+    #     mask_grasp[:] = tuple(cfg.GRASP_MASK)
         
-        # 1. Grasp constraint (gripper holds tool)
-        grasp_tf = pose_to_se3(cfg.TOOL_IN_GRIPPER)
-        mask_grasp = Mask()
-        mask_grasp[:] = tuple(cfg.GRASP_MASK)
+    #     pc_grasp = RelativeTransformation.create(
+    #         'grasp', robot.asPinDevice(),
+    #         joint_gripper, joint_tool,
+    #         grasp_tf, Id, mask_grasp
+    #     )
+    #     cts_grasp = ComparisonTypes()
+    #     cts_grasp[:] = tuple([ComparisonType.EqualToZero] * 6)
+    #     constraints['grasp'] = Implicit.create(
+    #         pc_grasp, cts_grasp, mask_grasp
+    #     )
         
-        pc_grasp = RelativeTransformation.create(
-            'grasp', robot.asPinDevice(),
-            joint_gripper, joint_tool,
-            grasp_tf, Id, mask_grasp
-        )
-        cts_grasp = ComparisonTypes()
-        cts_grasp[:] = tuple([ComparisonType.EqualToZero] * 6)
-        constraints['grasp'] = Implicit.create(
-            pc_grasp, cts_grasp, mask_grasp
-        )
+    #     # 2. Placement constraint (tool on dispenser)
+    #     placement_tf = xyzquat_to_se3(cfg.TOOL_ON_DISPENSER)
+    #     mask_place = cfg.PLACEMENT_MASK
         
-        # 2. Placement constraint (tool on dispenser)
-        placement_tf = pose_to_se3(cfg.TOOL_ON_DISPENSER)
-        mask_place = cfg.PLACEMENT_MASK
+    #     pc_place = Transformation.create(
+    #         'placement', robot.asPinDevice(),
+    #         joint_tool, Id, placement_tf, mask_place
+    #     )
+    #     cts_place = ComparisonTypes()
+    #     cts_place[:] = tuple([ComparisonType.EqualToZero] * 4)
+    #     implicit_mask_place = [True] * 4
+    #     constraints['placement'] = Implicit.create(
+    #         pc_place, cts_place, implicit_mask_place
+    #     )
         
-        pc_place = Transformation.create(
-            'placement', robot.asPinDevice(),
-            joint_tool, Id, placement_tf, mask_place
-        )
-        cts_place = ComparisonTypes()
-        cts_place[:] = tuple([ComparisonType.EqualToZero] * 4)
-        implicit_mask_place = [True] * 4
-        constraints['placement'] = Implicit.create(
-            pc_place, cts_place, implicit_mask_place
-        )
+    #     # 3. Placement complement (X, Y free)
+    #     mask_place_comp = cfg.PLACEMENT_COMPLEMENT_MASK
         
-        # 3. Placement complement (X, Y free)
-        mask_place_comp = cfg.PLACEMENT_COMPLEMENT_MASK
+    #     pc_place_comp = Transformation.create(
+    #         'placement/complement', robot.asPinDevice(),
+    #         joint_tool, Id, placement_tf, mask_place_comp
+    #     )
+    #     cts_place_comp = ComparisonTypes()
+    #     cts_place_comp[:] = tuple([ComparisonType.Equality] * 2)
+    #     implicit_mask_comp = [True] * 2
+    #     constraints['placement/complement'] = Implicit.create(
+    #         pc_place_comp, cts_place_comp, implicit_mask_comp
+    #     )
         
-        pc_place_comp = Transformation.create(
-            'placement/complement', robot.asPinDevice(),
-            joint_tool, Id, placement_tf, mask_place_comp
-        )
-        cts_place_comp = ComparisonTypes()
-        cts_place_comp[:] = tuple([ComparisonType.Equality] * 2)
-        implicit_mask_comp = [True] * 2
-        constraints['placement/complement'] = Implicit.create(
-            pc_place_comp, cts_place_comp, implicit_mask_comp
-        )
+    #     # 4. Gripper-tool aligned (gripper above tool)
+    #     aligned_tf = xyzquat_to_se3(cfg.GRIPPER_ABOVE_TOOL)
+    #     mask_aligned = Mask()
+    #     mask_aligned[:] = tuple(cfg.GRASP_MASK)
         
-        # 4. Gripper-tool aligned (gripper above tool)
-        aligned_tf = pose_to_se3(cfg.GRIPPER_ABOVE_TOOL)
-        mask_aligned = Mask()
-        mask_aligned[:] = tuple(cfg.GRASP_MASK)
+    #     pc_aligned = RelativeTransformation.create(
+    #         'gripper_tool_aligned', robot.asPinDevice(),
+    #         joint_gripper, joint_tool,
+    #         aligned_tf, Id, mask_aligned
+    #     )
+    #     cts_aligned = ComparisonTypes()
+    #     cts_aligned[:] = tuple([ComparisonType.EqualToZero] * 6)
+    #     constraints['gripper_tool_aligned'] = Implicit.create(
+    #         pc_aligned, cts_aligned, mask_aligned
+    #     )
         
-        pc_aligned = RelativeTransformation.create(
-            'gripper_tool_aligned', robot.asPinDevice(),
-            joint_gripper, joint_tool,
-            aligned_tf, Id, mask_aligned
-        )
-        cts_aligned = ComparisonTypes()
-        cts_aligned[:] = tuple([ComparisonType.EqualToZero] * 6)
-        constraints['gripper_tool_aligned'] = Implicit.create(
-            pc_aligned, cts_aligned, mask_aligned
-        )
+    #     # 5. Tool in air constraint
+    #     tool_air_tf = xyzquat_to_se3(cfg.TOOL_IN_AIR)
+    #     mask_air = cfg.PLACEMENT_MASK
         
-        # 5. Tool in air constraint
-        tool_air_tf = pose_to_se3(cfg.TOOL_IN_AIR)
-        mask_air = cfg.PLACEMENT_MASK
+    #     pc_air = Transformation.create(
+    #         'tool_in_air', robot.asPinDevice(),
+    #         joint_tool, Id, tool_air_tf, mask_air
+    #     )
+    #     cts_air = ComparisonTypes()
+    #     cts_air[:] = tuple([ComparisonType.EqualToZero] * 4)
+    #     implicit_mask_air = [True] * 4
+    #     constraints['tool_in_air'] = Implicit.create(
+    #         pc_air, cts_air, implicit_mask_air
+    #     )
         
-        pc_air = Transformation.create(
-            'tool_in_air', robot.asPinDevice(),
-            joint_tool, Id, tool_air_tf, mask_air
-        )
-        cts_air = ComparisonTypes()
-        cts_air[:] = tuple([ComparisonType.EqualToZero] * 4)
-        implicit_mask_air = [True] * 4
-        constraints['tool_in_air'] = Implicit.create(
-            pc_air, cts_air, implicit_mask_air
-        )
+    #     # 6. Tool in air complement
+    #     mask_air_comp = cfg.PLACEMENT_COMPLEMENT_MASK
         
-        # 6. Tool in air complement
-        mask_air_comp = cfg.PLACEMENT_COMPLEMENT_MASK
+    #     pc_air_comp = Transformation.create(
+    #         'tool_in_air/complement', robot.asPinDevice(),
+    #         joint_tool, Id, tool_air_tf, mask_air_comp
+    #     )
+    #     cts_air_comp = ComparisonTypes()
+    #     cts_air_comp[:] = tuple([ComparisonType.Equality] * 2)
+    #     implicit_mask_air_comp = [True] * 2
+    #     constraints['tool_in_air/complement'] = Implicit.create(
+    #         pc_air_comp, cts_air_comp, implicit_mask_air_comp
+    #     )
         
-        pc_air_comp = Transformation.create(
-            'tool_in_air/complement', robot.asPinDevice(),
-            joint_tool, Id, tool_air_tf, mask_air_comp
-        )
-        cts_air_comp = ComparisonTypes()
-        cts_air_comp[:] = tuple([ComparisonType.Equality] * 2)
-        implicit_mask_air_comp = [True] * 2
-        constraints['tool_in_air/complement'] = Implicit.create(
-            pc_air_comp, cts_air_comp, implicit_mask_air_comp
-        )
-        
-        print("    ✓ Created PyHPP constraints")
-        return constraints
+    #     print("    ✓ Created PyHPP constraints")
+    #     return constraints
     
     def create_constraints(self) -> None:
         """Create all transformation constraints."""
@@ -377,7 +379,7 @@ class GraspFrameGripperTask(ManipulationTask):
         print(f"    ✓ Set objects: {objects}")
         
         # Set environment contacts (dispenser surface)
-        env_contacts = ["ground_demo/pancake_table_table_top"]
+        env_contacts = ["ground_demo/tools_dispenser_surface"]
         factory.environmentContacts(env_contacts)
         print(f"    ✓ Set environment contacts: {env_contacts}")
         
@@ -403,310 +405,302 @@ class GraspFrameGripperTask(ManipulationTask):
         
         return graph
     
-    def _create_pyhpp_graph_with_factory(self):
-        """Create graph using PyHPP ConstraintGraphFactory."""
-        print("    Using PyHPP ConstraintGraphFactory")
+    # def _create_pyhpp_graph_with_factory(self):
+    #     """Create graph using PyHPP ConstraintGraphFactory."""
+    #     print("    Using PyHPP ConstraintGraphFactory")
         
-        # Create placement constraints for factory
-        constraints = self.pyhpp_constraints
+    #     # Create placement constraints for factory
+    #     constraints = self.pyhpp_constraints
         
-        # Configure handle masks (required by factory)
-        try:
-            handle_name = "frame_gripper/h_FG_tool"
-            handle = self.robot.handles()[handle_name]
-            # Set mask for handle (all DOF constrained)
-            handle.mask = [True, True, True, True, True, True]
-            print("    ✓ Configured handle mask")
-        except (KeyError, Exception) as e:
-            print(f"    ⚠ Could not configure handle mask: {e}")
-            print("    Continuing without handle mask configuration...")
+    #     # Configure handle masks (required by factory)
+    #     try:
+    #         handle_name = "frame_gripper/h_FG_tool"
+    #         handle = self.robot.handles()[handle_name]
+    #         # Set mask for handle (all DOF constrained)
+    #         handle.mask = [True, True, True, True, True, True]
+    #         print("    ✓ Configured handle mask")
+    #     except (KeyError, Exception) as e:
+    #         print(f"    ⚠ Could not configure handle mask: {e}")
+    #         print("    Continuing without handle mask configuration...")
         
-        # Create graph and factory
-        graph = Graph("graph", self.robot, self.ps)
-        graph.maxIterations(100)
-        graph.errorThreshold(0.00001)
+    #     # Create graph and factory
+    #     graph = Graph("graph", self.robot, self.ps)
+    #     graph.maxIterations(100)
+    #     graph.errorThreshold(0.00001)
         
-        # Register constraints
-        graph.registerConstraints(
-            constraints['place_frame_gripper'],
-            constraints['place_frame_gripper/complement'],
-            constraints['place_frame_gripper/hold']
-        )
+    #     # Register constraints
+    #     graph.registerConstraints(
+    #         constraints['place_frame_gripper'],
+    #         constraints['place_frame_gripper/complement'],
+    #         constraints['place_frame_gripper/hold']
+    #     )
         
-        factory = PyHPPConstraintGraphFactory(graph, constraints)
+    #     factory = PyHPPConstraintGraphFactory(graph, constraints)
         
-        # Set grippers
-        grippers = ["spacelab/g_ur10_tool"]
-        factory.setGrippers(grippers)
-        print(f"    ✓ Set grippers: {grippers}")
+    #     # Set grippers
+    #     grippers = ["spacelab/g_ur10_tool"]
+    #     factory.setGrippers(grippers)
+    #     print(f"    ✓ Set grippers: {grippers}")
         
-        # Set objects with handles
-        objects = ["frame_gripper"]
-        handles_per_object = [["frame_gripper/h_FG_tool"]]
-        contact_surfaces_per_object = [[]]
-        factory.setObjects(
-            objects, handles_per_object, contact_surfaces_per_object
-        )
-        print(f"    ✓ Set objects: {objects}")
+    #     # Set objects with handles
+    #     objects = ["frame_gripper"]
+    #     handles_per_object = [["frame_gripper/h_FG_tool"]]
+    #     contact_surfaces_per_object = [[]]
+    #     factory.setObjects(
+    #         objects, handles_per_object, contact_surfaces_per_object
+    #     )
+    #     print(f"    ✓ Set objects: {objects}")
         
-        # Note: Not setting environment contacts because we don't use
-        # contact surfaces. The placement constraint handles surface contact.
+    #     # Note: Not setting environment contacts because we don't use
+    #     # contact surfaces. The placement constraint handles surface contact.
         
-        # Set rules (allow all gripper-handle pairs)
-        rules = [PyHPPRule([".*"], [".*"], True)]
-        factory.setRules(rules)
-        print("    ✓ Set rules: allow all")
+    #     # Set rules (allow all gripper-handle pairs)
+    #     rules = [PyHPPRule([".*"], [".*"], True)]
+    #     factory.setRules(rules)
+    #     print("    ✓ Set rules: allow all")
         
-        # Generate graph structure
-        factory.generate()
-        print("    ✓ Generated graph structure")
+    #     # Generate graph structure
+    #     factory.generate()
+    #     print("    ✓ Generated graph structure")
         
-        # Initialize graph
-        graph.initialize()
-        print("    ✓ Graph initialized")
+    #     # Initialize graph
+    #     graph.initialize()
+    #     print("    ✓ Graph initialized")
         
-        # Store graph for later access
-        self.ps.constraintGraph(graph)
+    #     # Store graph for later access
+    #     self.ps.constraintGraph(graph)
         
-        # Extract and store states/edges for visualization
-        self._extract_pyhpp_factory_graph_structure(graph)
+    #     # Extract and store states/edges for visualization
+    #     self._extract_pyhpp_factory_graph_structure(graph)
         
-        return graph
+    #     return graph
     
-    def _create_pyhpp_placement_constraints(self) -> Dict:
-        """Create placement constraints for PyHPP factory mode."""
-        constraints = {}
-        robot = self.robot
-        cfg = self.config
+    # def _create_pyhpp_placement_constraints(self) -> Dict:
+    #     """Create placement constraints for PyHPP factory mode."""
+    #     constraints = {}
+    #     robot = self.robot
+    #     cfg = self.config
         
-        # Tool placement on dispenser
-        placement_tf = self._pose_to_se3(cfg.TOOL_ON_DISPENSER)
-        joint_tool = robot.model().getJointId(cfg.TOOL_NAME)
-        Id = SE3.Identity()
+    #     # Tool placement on dispenser
+    #     placement_tf = xyzquat_to_se3(cfg.TOOL_ON_DISPENSER)
+    #     joint_tool = robot.model().getJointId(cfg.TOOL_NAME)
         
-        # Placement constraint
-        pc_place = Transformation.create(
-            'place_frame_gripper',
-            robot.asPinDevice(),
-            joint_tool, Id, placement_tf,
-            cfg.PLACEMENT_MASK
-        )
-        cts = ComparisonTypes()
-        cts[:] = tuple([ComparisonType.EqualToZero] * 4)
-        constraints['place_frame_gripper'] = Implicit.create(
-            pc_place, cts, [True] * 4
-        )
+    #     # Placement constraint
+    #     pc_place = Transformation.create(
+    #         'place_frame_gripper',
+    #         robot.asPinDevice(),
+    #         joint_tool, SE3.Identity(), placement_tf,
+    #         cfg.PLACEMENT_MASK
+    #     )
+    #     cts = ComparisonTypes()
+    #     cts[:] = tuple([ComparisonType.EqualToZero] * 4)
+    #     constraints['place_frame_gripper'] = Implicit.create(
+    #         pc_place, cts, [True] * 4
+    #     )
         
-        # Placement complement
-        pc_comp = Transformation.create(
-            'place_frame_gripper/complement',
-            robot.asPinDevice(),
-            joint_tool, Id, placement_tf,
-            cfg.PLACEMENT_COMPLEMENT_MASK
-        )
-        cts[:] = tuple([ComparisonType.Equality] * 2)
-        constraints['place_frame_gripper/complement'] = Implicit.create(
-            pc_comp, cts, [True] * 2
-        )
+    #     # Placement complement
+    #     pc_comp = Transformation.create(
+    #         'place_frame_gripper/complement',
+    #         robot.asPinDevice(),
+    #         joint_tool, SE3.Identity(), placement_tf,
+    #         cfg.PLACEMENT_COMPLEMENT_MASK
+    #     )
+    #     cts[:] = tuple([ComparisonType.Equality] * 2)
+    #     constraints['place_frame_gripper/complement'] = Implicit.create(
+    #         pc_comp, cts, [True] * 2
+    #     )
         
-        # Combined locked joint for placement
-        cts_combined = ComparisonTypes()
-        cts_combined[:] = (
-            ComparisonType.Equality, ComparisonType.Equality,
-            ComparisonType.EqualToZero,
-            ComparisonType.EqualToZero, ComparisonType.EqualToZero,
-            ComparisonType.EqualToZero
-        )
-        from pyhpp.constraints import LockedJoint
-        ll = LockedJoint.createWithComp(
-            robot.asPinDevice(),
-            cfg.TOOL_NAME,
-            np.array(cfg.TOOL_ON_DISPENSER),
-            cts_combined
-        )
-        constraints['place_frame_gripper/hold'] = ll
+    #     # Combined locked joint for placement
+    #     cts_combined = ComparisonTypes()
+    #     cts_combined[:] = (
+    #         ComparisonType.Equality, ComparisonType.Equality,
+    #         ComparisonType.EqualToZero,
+    #         ComparisonType.EqualToZero, ComparisonType.EqualToZero,
+    #         ComparisonType.EqualToZero
+    #     )
+    #     from pyhpp.constraints import LockedJoint
+    #     ll = LockedJoint.createWithComp(
+    #         robot.asPinDevice(),
+    #         cfg.TOOL_NAME,
+    #         np.array(cfg.TOOL_ON_DISPENSER),
+    #         cts_combined
+    #     )
+    #     constraints['place_frame_gripper/hold'] = ll
         
-        print("    ✓ Created placement constraints for factory")
-        return constraints
+    #     print("    ✓ Created placement constraints for factory")
+    #     return constraints
     
-    def _pose_to_se3(self, pose):
-        """Convert [x,y,z,qx,qy,qz,qw] to SE3."""
-        return SE3(
-            Quaternion(pose[6], pose[3], pose[4], pose[5]),
-            np.array(pose[:3])
-        )
+    # def _extract_pyhpp_factory_graph_structure(self, graph):
+    #     """Extract states and edges from factory-generated graph."""
+    #     # PyHPP factory creates states and transitions internally
+    #     # We need to extract them for visualization
+    #     # For now, just create empty dicts - visualization will show
+    #     # that factory mode doesn't provide full structure access
+    #     self.pyhpp_states = {}
+    #     self.pyhpp_edges = {}
+    #     self.pyhpp_edge_topology = {}
+    #     print("    ℹ Factory-generated graph structure not fully accessible")
     
-    def _extract_pyhpp_factory_graph_structure(self, graph):
-        """Extract states and edges from factory-generated graph."""
-        # PyHPP factory creates states and transitions internally
-        # We need to extract them for visualization
-        # For now, just create empty dicts - visualization will show
-        # that factory mode doesn't provide full structure access
-        self.pyhpp_states = {}
-        self.pyhpp_edges = {}
-        self.pyhpp_edge_topology = {}
-        print("    ℹ Factory-generated graph structure not fully accessible")
-    
-    def _create_pyhpp_graph_manual(self):
-        """Create graph manually using PyHPP APIs."""
-        print("    Building PyHPP graph manually")
+    # def _create_pyhpp_graph_manual(self):
+    #     """Create graph manually using PyHPP APIs."""
+    #     print("    Building PyHPP graph manually")
         
-        graph = Graph("graph", self.robot, self.ps)
-        cfg = self.config
-        cts = self.pyhpp_constraints
+    #     graph = Graph("graph", self.robot, self.ps)
+    #     cfg = self.config
+    #     cts = self.pyhpp_constraints
         
-        # Create states (order matters for solver!)
-        states = {}
-        states['grasp'] = graph.createState("grasp", False, 0)
-        states['tool-in-air'] = graph.createState("tool-in-air", False, 0)
-        states['grasp-placement'] = graph.createState(
-            "grasp-placement", False, 0
-        )
-        states['gripper-above-tool'] = graph.createState(
-            "gripper-above-tool", False, 0
-        )
-        states['placement'] = graph.createState("placement", False, 0)
-        print(f"    ✓ Created {len(states)} states")
+    #     # Create states (order matters for solver!)
+    #     states = {}
+    #     states['grasp'] = graph.createState("grasp", False, 0)
+    #     states['tool-in-air'] = graph.createState("tool-in-air", False, 0)
+    #     states['grasp-placement'] = graph.createState(
+    #         "grasp-placement", False, 0
+    #     )
+    #     states['gripper-above-tool'] = graph.createState(
+    #         "gripper-above-tool", False, 0
+    #     )
+    #     states['placement'] = graph.createState("placement", False, 0)
+    #     print(f"    ✓ Created {len(states)} states")
         
-        # Store states and edges for later access
-        self.pyhpp_states = states
-        self.pyhpp_edges = {}
-        self.pyhpp_edge_topology = {}  # Store from/to for each edge
+    #     # Store states and edges for later access
+    #     self.pyhpp_states = states
+    #     self.pyhpp_edges = {}
+    #     self.pyhpp_edge_topology = {}  # Store from/to for each edge
         
-        # Create edges (transitions)
-        # Self-loops
-        self.pyhpp_edges['transit'] = graph.createTransition(
-            states['placement'], states['placement'],
-            "transit", 1, states['placement']
-        )
-        self.pyhpp_edge_topology['transit'] = ('placement', 'placement')
+    #     # Create edges (transitions)
+    #     # Self-loops
+    #     self.pyhpp_edges['transit'] = graph.createTransition(
+    #         states['placement'], states['placement'],
+    #         "transit", 1, states['placement']
+    #     )
+    #     self.pyhpp_edge_topology['transit'] = ('placement', 'placement')
         
-        self.pyhpp_edges['transfer'] = graph.createTransition(
-            states['grasp'], states['grasp'],
-            "transfer", 1, states['grasp']
-        )
-        self.pyhpp_edge_topology['transfer'] = ('grasp', 'grasp')
+    #     self.pyhpp_edges['transfer'] = graph.createTransition(
+    #         states['grasp'], states['grasp'],
+    #         "transfer", 1, states['grasp']
+    #     )
+    #     self.pyhpp_edge_topology['transfer'] = ('grasp', 'grasp')
         
-        # From placement
-        self.pyhpp_edges['approach-tool'] = graph.createTransition(
-            states['placement'], states['gripper-above-tool'],
-            "approach-tool", 1, states['placement']
-        )
-        self.pyhpp_edge_topology['approach-tool'] = (
-            'placement', 'gripper-above-tool'
-        )
+    #     # From placement
+    #     self.pyhpp_edges['approach-tool'] = graph.createTransition(
+    #         states['placement'], states['gripper-above-tool'],
+    #         "approach-tool", 1, states['placement']
+    #     )
+    #     self.pyhpp_edge_topology['approach-tool'] = (
+    #         'placement', 'gripper-above-tool'
+    #     )
         
-        # From gripper-above-tool
-        self.pyhpp_edges['move-gripper-away'] = graph.createTransition(
-            states['gripper-above-tool'], states['placement'],
-            "move-gripper-away", 1, states['placement']
-        )
-        self.pyhpp_edge_topology['move-gripper-away'] = (
-            'gripper-above-tool', 'placement'
-        )
+    #     # From gripper-above-tool
+    #     self.pyhpp_edges['move-gripper-away'] = graph.createTransition(
+    #         states['gripper-above-tool'], states['placement'],
+    #         "move-gripper-away", 1, states['placement']
+    #     )
+    #     self.pyhpp_edge_topology['move-gripper-away'] = (
+    #         'gripper-above-tool', 'placement'
+    #     )
         
-        self.pyhpp_edges['grasp-tool'] = graph.createTransition(
-            states['gripper-above-tool'], states['grasp-placement'],
-            "grasp-tool", 1, states['placement']
-        )
-        self.pyhpp_edge_topology['grasp-tool'] = (
-            'gripper-above-tool', 'grasp-placement'
-        )
+    #     self.pyhpp_edges['grasp-tool'] = graph.createTransition(
+    #         states['gripper-above-tool'], states['grasp-placement'],
+    #         "grasp-tool", 1, states['placement']
+    #     )
+    #     self.pyhpp_edge_topology['grasp-tool'] = (
+    #         'gripper-above-tool', 'grasp-placement'
+    #     )
         
-        # From grasp-placement
-        self.pyhpp_edges['release-tool'] = graph.createTransition(
-            states['grasp-placement'], states['gripper-above-tool'],
-            "release-tool", 1, states['placement']
-        )
-        self.pyhpp_edge_topology['release-tool'] = (
-            'grasp-placement', 'gripper-above-tool'
-        )
+    #     # From grasp-placement
+    #     self.pyhpp_edges['release-tool'] = graph.createTransition(
+    #         states['grasp-placement'], states['gripper-above-tool'],
+    #         "release-tool", 1, states['placement']
+    #     )
+    #     self.pyhpp_edge_topology['release-tool'] = (
+    #         'grasp-placement', 'gripper-above-tool'
+    #     )
         
-        self.pyhpp_edges['lift-tool'] = graph.createTransition(
-            states['grasp-placement'], states['tool-in-air'],
-            "lift-tool", 1, states['grasp']
-        )
-        self.pyhpp_edge_topology['lift-tool'] = (
-            'grasp-placement', 'tool-in-air'
-        )
+    #     self.pyhpp_edges['lift-tool'] = graph.createTransition(
+    #         states['grasp-placement'], states['tool-in-air'],
+    #         "lift-tool", 1, states['grasp']
+    #     )
+    #     self.pyhpp_edge_topology['lift-tool'] = (
+    #         'grasp-placement', 'tool-in-air'
+    #     )
         
-        # From tool-in-air
-        self.pyhpp_edges['lower-tool'] = graph.createTransition(
-            states['tool-in-air'], states['grasp-placement'],
-            "lower-tool", 1, states['grasp']
-        )
-        self.pyhpp_edge_topology['lower-tool'] = (
-            'tool-in-air', 'grasp-placement'
-        )
+    #     # From tool-in-air
+    #     self.pyhpp_edges['lower-tool'] = graph.createTransition(
+    #         states['tool-in-air'], states['grasp-placement'],
+    #         "lower-tool", 1, states['grasp']
+    #     )
+    #     self.pyhpp_edge_topology['lower-tool'] = (
+    #         'tool-in-air', 'grasp-placement'
+    #     )
         
-        self.pyhpp_edges['move-tool-away'] = graph.createTransition(
-            states['tool-in-air'], states['grasp'],
-            "move-tool-away", 1, states['grasp']
-        )
-        self.pyhpp_edge_topology['move-tool-away'] = (
-            'tool-in-air', 'grasp'
-        )
+    #     self.pyhpp_edges['move-tool-away'] = graph.createTransition(
+    #         states['tool-in-air'], states['grasp'],
+    #         "move-tool-away", 1, states['grasp']
+    #     )
+    #     self.pyhpp_edge_topology['move-tool-away'] = (
+    #         'tool-in-air', 'grasp'
+    #     )
         
-        # From grasp
-        self.pyhpp_edges['approach-dispenser'] = graph.createTransition(
-            states['grasp'], states['tool-in-air'],
-            "approach-dispenser", 1, states['grasp']
-        )
-        self.pyhpp_edge_topology['approach-dispenser'] = (
-            'grasp', 'tool-in-air'
-        )
-        print("    ✓ Created transitions")
+    #     # From grasp
+    #     self.pyhpp_edges['approach-dispenser'] = graph.createTransition(
+    #         states['grasp'], states['tool-in-air'],
+    #         "approach-dispenser", 1, states['grasp']
+    #     )
+    #     self.pyhpp_edge_topology['approach-dispenser'] = (
+    #         'grasp', 'tool-in-air'
+    #     )
+    #     print("    ✓ Created transitions")
         
-        # Add constraints to states
-        graph.addNumericalConstraint(
-            states['placement'], cts['placement']
-        )
-        graph.addNumericalConstraint(
-            states['gripper-above-tool'], cts['placement']
-        )
-        graph.addNumericalConstraint(
-            states['gripper-above-tool'], cts['gripper_tool_aligned']
-        )
-        graph.addNumericalConstraint(
-            states['grasp-placement'], cts['grasp']
-        )
-        graph.addNumericalConstraint(
-            states['grasp-placement'], cts['placement']
-        )
-        graph.addNumericalConstraint(
-            states['tool-in-air'], cts['grasp']
-        )
-        graph.addNumericalConstraint(
-            states['tool-in-air'], cts['tool_in_air']
-        )
-        graph.addNumericalConstraint(states['grasp'], cts['grasp'])
-        print("    ✓ Added constraints to states")
+    #     # Add constraints to states
+    #     graph.addNumericalConstraint(
+    #         states['placement'], cts['placement']
+    #     )
+    #     graph.addNumericalConstraint(
+    #         states['gripper-above-tool'], cts['placement']
+    #     )
+    #     graph.addNumericalConstraint(
+    #         states['gripper-above-tool'], cts['gripper_tool_aligned']
+    #     )
+    #     graph.addNumericalConstraint(
+    #         states['grasp-placement'], cts['grasp']
+    #     )
+    #     graph.addNumericalConstraint(
+    #         states['grasp-placement'], cts['placement']
+    #     )
+    #     graph.addNumericalConstraint(
+    #         states['tool-in-air'], cts['grasp']
+    #     )
+    #     graph.addNumericalConstraint(
+    #         states['tool-in-air'], cts['tool_in_air']
+    #     )
+    #     graph.addNumericalConstraint(states['grasp'], cts['grasp'])
+    #     print("    ✓ Added constraints to states")
         
-        # Add constraints to edges
-        for edge_name in ['transit', 'approach-tool', 'move-gripper-away',
-                          'grasp-tool', 'release-tool']:
-            graph.addNumericalConstraintsToTransition(
-                self.pyhpp_edges[edge_name], [cts['placement/complement']]
-            )
+    #     # Add constraints to edges
+    #     for edge_name in ['transit', 'approach-tool', 'move-gripper-away',
+    #                       'grasp-tool', 'release-tool']:
+    #         graph.addNumericalConstraintsToTransition(
+    #             self.pyhpp_edges[edge_name], [cts['placement/complement']]
+    #         )
         
-        for edge_name in ['lift-tool', 'lower-tool']:
-            graph.addNumericalConstraintsToTransition(
-                self.pyhpp_edges[edge_name], [cts['tool_in_air/complement']]
-            )
-        print("    ✓ Added constraints to edges")
+    #     for edge_name in ['lift-tool', 'lower-tool']:
+    #         graph.addNumericalConstraintsToTransition(
+    #             self.pyhpp_edges[edge_name], [cts['tool_in_air/complement']]
+    #         )
+    #     print("    ✓ Added constraints to edges")
         
-        # Configure graph
-        graph.maxIterations(100)
-        graph.errorThreshold(0.00001)
+    #     # Configure graph
+    #     graph.maxIterations(100)
+    #     graph.errorThreshold(0.00001)
         
-        # Initialize
-        graph.initialize()
-        print("    ✓ Graph initialized")
+    #     # Initialize
+    #     graph.initialize()
+    #     print("    ✓ Graph initialized")
         
-        # Store in problem
-        self.ps.constraintGraph(graph)
+    #     # Store in problem
+    #     self.ps.constraintGraph(graph)
         
-        return graph
+    #     return graph
     
     def _create_graph_manual(self):
         """Create graph manually (original implementation)."""
@@ -1113,6 +1107,27 @@ def main(
     # Run task
     result = task.run(visualize=visualize, solve=solve)
     
+    # Visualize handles and grippers if viewer available
+    if visualize and result.get('viewer') and HAS_VISUALIZE_FRAMES:
+        print("\n" + "=" * 70)
+        print("Visualizing Handles and Grippers")
+        print("=" * 70)
+        viewer = result['viewer']
+        
+        # Display handle
+        handle_name = "frame_gripper/h_FG_tool"
+        print(f"  Adding handle frame: {handle_name}")
+        if displayHandle(viewer, handle_name):
+            print("    ✓ Handle frame displayed")
+        
+        # Display gripper
+        gripper_name = "spacelab/g_ur10_tool"
+        print(f"  Adding gripper frame: {gripper_name}")
+        if displayGripper(viewer, gripper_name):
+            print("    ✓ Gripper frame displayed")
+        
+        viewer.client.gui.refresh()
+    
     # Print summary
     print("\n" + "=" * 70)
     print("Task Complete!")
@@ -1131,6 +1146,7 @@ def main(
     if solve:
         print("\nTo replay path:")
         print("  task.planner.play_path(0)")
+
 
     # Visualize constraint graph
     print("\n📊 Generating constraint graph visualization...")

@@ -1106,6 +1106,7 @@ class ManipulationTask:
             "robot": self.robot,
             "ps": self.ps,
             "graph": self.graph,
+            "viewer": self.planner.viewer if self.planner else None
         }
 
 
