@@ -5,6 +5,24 @@ Configuration classes for manipulation tasks.
 from typing import Dict, List, Optional
 import numpy as np
 
+# Default URDF paths
+DEFAULT_PATHS = {
+    "robot_urdf": "package://spacelab_mock_hardware/description/urdf/allRobots_spacelab_robot.urdf",
+    "robot_srdf": "package://spacelab_mock_hardware/description/srdf/allRobots_spacelab_robot.srdf",
+    "environment": "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf",
+    "objects": {
+        "RS1": "package://spacelab_mock_hardware/description/urdf/RS1.urdf",
+        "RS2": "package://spacelab_mock_hardware/description/urdf/RS2.urdf",
+        "RS3": "package://spacelab_mock_hardware/description/urdf/RS3.urdf",
+        "RS4": "package://spacelab_mock_hardware/description/urdf/RS4.urdf",
+        "RS5": "package://spacelab_mock_hardware/description/urdf/RS5.urdf",
+        "RS6": "package://spacelab_mock_hardware/description/urdf/RS6.urdf",
+        "screw_driver": "package://spacelab_mock_hardware/description/urdf/screw_driver.urdf",
+        "frame_gripper": "package://spacelab_mock_hardware/description/urdf/frame_gripper.urdf",
+        "cleat_gripper": "package://spacelab_mock_hardware/description/urdf/cleat_gripper.urdf",
+    }
+}
+
 
 class RobotJoints:
     """Joint names for the composite robot."""
@@ -344,6 +362,7 @@ class ManipulationConfig:
     ENV_CONTACTS = ["ground_demo/surface"]
 
 __all__ = [
+    "DEFAULT_PATHS",
     "RobotJoints",
     "InitialConfigurations",
     "JointBounds",
