@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
 
-from visualize_frames import (
+from agimus_spacelab.visualization import (
     displayHandle,
     displayGripper,
     displayHandleApproach,
@@ -25,8 +25,8 @@ from visualize_frames import (
     clear_all_visualizations,
 )
 
-from spacelab_tools import SpaceLabSceneBuilder
-from spacelab_config import InitialConfigurations, ManipulationConfig
+from agimus_spacelab.planning import SceneBuilder
+from agimus_spacelab.config import InitialConfigurations
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 try:
@@ -50,7 +50,7 @@ def main():
     
     # Setup scene
     print("\n1. Setting up scene...")
-    builder = SpaceLabSceneBuilder()
+    builder = SceneBuilder()
     builder.load_robot()
     builder.load_environment()
     builder.load_objects(["frame_gripper", "RS1"])

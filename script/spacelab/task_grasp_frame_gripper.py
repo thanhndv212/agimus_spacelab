@@ -20,28 +20,16 @@ import sys
 from pathlib import Path
 from typing import List, Dict
 
-# Add script directory to path
-sys.path.insert(0, str(Path(__file__).parent))
-
 from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
-from agimus_spacelab.visualization import print_joint_info, visualize_constraint_graph
-
-# Import frame visualization utilities
-try:
-    from visualize_frames import displayHandle, displayGripper
-    HAS_VISUALIZE_FRAMES = True
-except ImportError:
-    HAS_VISUALIZE_FRAMES = False
-    displayHandle = None
-    displayGripper = None
+from agimus_spacelab.visualization import print_joint_info, visualize_constraint_graph, displayHandle, displayGripper
+from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 # Add config directory
 config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
 
-from spacelab_config import InitialConfigurations, TaskConfigurations
-from agimus_spacelab.utils import xyzrpy_to_xyzquat, xyzquat_to_se3
+from spacelab_config import TaskConfigurations
 
 # Import backend availability flags for validation
 try:
@@ -94,59 +82,7 @@ except ImportError:
 # ============================================================================
 # Task Configuration
 # ============================================================================
-
-class GraspFrameGripperConfig(TaskConfigurations.GraspFrameGripper):
-    """Configuration for UR10 grasping frame_gripper task."""
-    
-    # Gripper and object names
-    GRIPPER_NAME = "spacelab/ur10_joint_6_7"
-    TOOL_NAME = "frame_gripper/root_joint"
-    
-    # Grippers (for factory mode)
-    GRIPPERS = ["spacelab/g_ur10_tool"]
-    
-    # Objects in scene
-    OBJECTS = [
-        "frame_gripper",
-        "screw_driver",
-        "RS1",
-        "RS2",
-        "RS3",
-        "RS4",
-        "RS5",
-        "RS6"
-    ]
-    
-    # Handles per object (for factory mode)
-    HANDLES_PER_OBJECT = [
-        ["frame_gripper/h_FG_tool"],  # frame_gripper
-        ["screw_driver/h_SD_tool"],   # screw_driver
-        ["RS1/h_RS1_FG"],              # RS1
-        ["RS2/h_RS2_FG"],              # RS2
-        ["RS3/h_RS3_FG"],              # RS3
-        ["RS4/h_RS4_FG"],              # RS4
-        ["RS5/h_RS5_FG"],              # RS5
-        ["RS6/h_RS6_FG"],              # RS6
-    ]
-    
-    # Tool poses (computed from initial config)
-    TOOL_ON_DISPENSER = None
-    TOOL_IN_AIR = None
-    
-    @classmethod
-    def init_poses(cls):
-        """Initialize tool poses from configuration."""
-        tool_pose_xyzrpy = InitialConfigurations.FRAME_GRIPPER
-        tool_pose_quat = xyzrpy_to_xyzquat(tool_pose_xyzrpy)
-        
-        cls.TOOL_ON_DISPENSER = tool_pose_quat.tolist()
-        
-        # Lifted position
-        cls.TOOL_IN_AIR = tool_pose_quat.copy()
-        cls.TOOL_IN_AIR[2] += cls.LIFT_HEIGHT  # Use inherited constant
-        cls.TOOL_IN_AIR = cls.TOOL_IN_AIR.tolist()
-
-
+GraspFrameGripperConfig = TaskConfigurations.GraspFrameGripper
 # Initialize poses
 GraspFrameGripperConfig.init_poses()
 
@@ -173,14 +109,6 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         self.config = GraspFrameGripperConfig
         self.use_factory = use_factory
-        
-        # Validate CORBA-specific imports for manual graph building
-        if self.backend == "corba" and not self.use_factory:
-            if ConstraintGraph is None:
-                raise ImportError(
-                    "CORBA graph classes not available. "
-                    "Either use --factory mode or install hpp.corbaserver"
-                )
         
     def get_objects(self) -> List[str]:
         """Return list of objects from configuration."""
@@ -606,7 +534,7 @@ def main(
     result = task.run(visualize=visualize, solve=solve)
     
     # Visualize handles and grippers if viewer available
-    if visualize and result.get('viewer') and HAS_VISUALIZE_FRAMES:
+    if visualize and result.get('viewer'):
         print("\n" + "=" * 70)
         print("Visualizing Handles and Grippers")
         print("=" * 70)
