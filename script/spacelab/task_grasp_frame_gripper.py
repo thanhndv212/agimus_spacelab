@@ -23,13 +23,9 @@ from typing import List, Dict
 # Add script directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from spacelab_tools import (
-    ManipulationTask,
-    GraphBuilder,
-    ConstraintBuilder,
-    print_joint_info,
-    visualize_constraint_graph,
-)
+from agimus_spacelab.tasks import ManipulationTask
+from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
+from agimus_spacelab.visualization import print_joint_info, visualize_constraint_graph
 
 # Import frame visualization utilities
 try:
@@ -49,13 +45,12 @@ from agimus_spacelab.utils import xyzrpy_to_xyzquat, xyzquat_to_se3
 
 # Import backend availability flags for validation
 try:
-    from agimus_spacelab.corba import HAS_CORBA
+    from agimus_spacelab.backends import get_available_backends
+    _available = get_available_backends()
+    HAS_CORBA = 'corba' in _available
+    HAS_PYHPP = 'pyhpp' in _available
 except ImportError:
     HAS_CORBA = False
-
-try:
-    from agimus_spacelab.pyhpp import HAS_PYHPP
-except ImportError:
     HAS_PYHPP = False
 
 # CORBA-specific imports for manual graph building (when not using factory)

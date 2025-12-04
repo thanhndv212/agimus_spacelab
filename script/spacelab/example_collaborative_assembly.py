@@ -30,11 +30,11 @@ from pathlib import Path
 # Add script directory
 sys.path.insert(0, str(Path(__file__).parent))
 
-from task_orchestration import (
+from agimus_spacelab.tasks import (
     TaskOrchestrator,
     TaskBuilder,
-    AtomicTask,
 )
+from agimus_spacelab.tasks.orchestration import AtomicTask
 
 
 # ============================================================================

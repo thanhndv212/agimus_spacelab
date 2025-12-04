@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
 
 from spacelab_config import InitialConfigurations, RobotJoints
 from spacelab_tools import SpaceLabSceneBuilder
-from agimus_spacelab.corba import CorbaManipulationPlanner
+from agimus_spacelab.backends import CorbaBackend as CorbaManipulationPlanner
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 try:
