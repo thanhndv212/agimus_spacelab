@@ -7,8 +7,12 @@ import numpy as np
 
 # Default URDF paths
 DEFAULT_PATHS = {
-    "robot_urdf": "package://spacelab_mock_hardware/description/urdf/allRobots_spacelab_robot.urdf",
-    "robot_srdf": "package://spacelab_mock_hardware/description/srdf/allRobots_spacelab_robot.srdf",
+    "robot": { 
+        "spacelab": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/allRobots_spacelab_robot.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/allRobots_spacelab_robot.srdf",
+            }
+    },
     "environment": "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf",
     "objects": {
         "RS1": "package://spacelab_mock_hardware/description/urdf/RS1.urdf",
@@ -54,6 +58,11 @@ class RobotJoints:
     
     # Object root joints (freeflyer: 7 DOF each)
     RS1_ROOT = "RS1/root_joint"
+    RS2_ROOT = "RS2/root_joint"
+    RS3_ROOT = "RS3/root_joint"
+    RS4_ROOT = "RS4/root_joint"
+    RS5_ROOT = "RS5/root_joint"
+    RS6_ROOT = "RS6/root_joint"
     SCREW_DRIVER_ROOT = "screw_driver/root_joint"
     FRAME_GRIPPER_ROOT = "frame_gripper/root_joint"
     CLEAT_GRIPPER_ROOT = "cleat_gripper/root_joint"
@@ -62,12 +71,17 @@ class RobotJoints:
     def all_robot_joints(cls) -> List[str]:
         """Get all robot joint names."""
         return cls.UR10 + cls.VISPA_BASE + cls.VISPA_ARM
-    
+
     @classmethod
-    def all_object_roots(cls) -> List[str]:
+    def all_object_root_joints(cls) -> List[str]:
         """Get all object root joint names."""
         return [
             cls.RS1_ROOT,
+            cls.RS2_ROOT,
+            cls.RS3_ROOT,
+            cls.RS4_ROOT,
+            cls.RS5_ROOT,
+            cls.RS6_ROOT,
             cls.SCREW_DRIVER_ROOT,
             cls.FRAME_GRIPPER_ROOT,
             cls.CLEAT_GRIPPER_ROOT,
@@ -360,6 +374,7 @@ class ManipulationConfig:
     
     # Environment contact surfaces
     ENV_CONTACTS = ["ground_demo/surface"]
+
 
 __all__ = [
     "DEFAULT_PATHS",
