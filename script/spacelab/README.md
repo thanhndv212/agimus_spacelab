@@ -71,14 +71,14 @@ python task_grasp_frame_gripper.py --backend pyhpp
 
 **Scene Builder:**
 ```python
-from spacelab_tools import SpaceLabSceneBuilder
+from agimus_spacelab.planning import SceneBuilder
 
 # CORBA
-builder = SpaceLabSceneBuilder(backend="corba")
+builder = SceneBuilder(backend="corba")
 planner, robot, ps = builder.build(objects=["frame_gripper"])
 
 # PyHPP
-builder = SpaceLabSceneBuilder(backend="pyhpp")
+builder = SceneBuilder(backend="pyhpp")
 planner, robot, ps = builder.build(objects=["frame_gripper"])
 ```
 
@@ -94,10 +94,7 @@ planner, robot, ps = builder.build(objects=["frame_gripper"])
 | **Python API** | 🔌 CORBA RPC | 🐍 Native bindings |
 | **Learning Curve** | 📚 Moderate | 📚 Lower |
 
-**💡 Tip:** Start with CORBA for stability, switch to PyHPP for performance-critical applications.
-
-See [BACKEND_INTEGRATION.md](BACKEND_INTEGRATION.md) for detailed migration guide and API reference.
-
+**💡 Tip:** Start with CORBA for stability, switch to PyHPP for performance-critical applications
 ---
 
 ## Architecture
@@ -163,159 +160,225 @@ script/
 
 ## Components
 
-### 1. Configuration (`spacelab_config.py`)
+The `agimus_spacelab` package is organized into logical modules:
 
-Centralized configuration for all manipulation tasks.
-
-**Classes:**
-- `RobotJoints`: Joint names for UR10, VISPA, and objects
-- `InitialConfigurations`: Initial joint angles and object poses (XYZRPY)
-- `JointBounds`: Joint limits and freeflyer bounds
-- `ManipulationConfig`: Grippers, handles, and valid grasp pairs
-
-**Usage:**
-```python
-from spacelab_config import InitialConfigurations, ManipulationConfig
-
-# Get robot initial config
-q_ur10 = InitialConfigurations.UR10
-
-# Get valid gripper-handle pairs
-pairs = ManipulationConfig.VALID_PAIRS["ur10_gripper"]
+```
+src/agimus_spacelab/
+├── __init__.py              # Main exports
+├── backends/                # Backend implementations
+│   ├── base.py              # Abstract base classes
+│   ├── corba.py             # CORBA backend (hpp-manipulation-corba)
+│   └── pyhpp.py             # PyHPP backend (hpp-python)
+├── planning/                # Planning tools
+│   ├── planner.py           # create_planner() factory
+│   ├── scene.py             # SceneBuilder
+│   ├── graph.py             # GraphBuilder
+│   ├── constraints.py       # ConstraintBuilder
+│   └── config.py            # ConfigGenerator
+├── tasks/                   # Task orchestration
+│   ├── base.py              # ManipulationTask base class
+│   ├── orchestration.py     # TaskOrchestrator, TaskBuilder
+│   └── bridge.py            # PlanningBridge
+├── visualization/           # Visualization tools
+│   └── viz.py               # Graph viz, frame display
+├── config/                  # Configuration utilities
+│   └── rules.py             # RuleGenerator
+└── utils/                   # Utilities
+    └── transforms.py        # Transform helpers
 ```
 
 ---
 
-### 2. Shared Tools (`spacelab_tools.py`)
+### 1. Backends (`agimus_spacelab.backends`)
 
-Reusable components for building manipulation tasks.
-
-#### **SpaceLabSceneBuilder**
-
-Fluent API for scene setup with dual backend support:
+Unified interface for CORBA and PyHPP backends.
 
 ```python
-from spacelab_tools import SpaceLabSceneBuilder
+from agimus_spacelab.backends import (
+    get_available_backends,
+    get_backend,
+    CorbaBackend,
+    PyHPPBackend,
+)
 
-# Quick setup (auto-detects or specify backend)
-scene_builder = SpaceLabSceneBuilder(backend="corba")  # or "pyhpp"
-planner, robot, ps = scene_builder.build(
+# Check available backends
+backends = get_available_backends()  # ['corba', 'pyhpp']
+
+# Get backend class by name
+BackendClass = get_backend("corba")  # Returns CorbaBackend
+
+# Direct instantiation
+planner = CorbaBackend()
+planner.load_robot("spacelab/ur10_gripper.urdf")
+```
+
+---
+
+### 2. Planning (`agimus_spacelab.planning`)
+
+Core planning functionality with unified API.
+
+#### **create_planner() - Factory Function**
+
+Creates backend-specific planner instances:
+
+```python
+from agimus_spacelab.planning import create_planner
+
+# Create planner with specific backend
+planner = create_planner(backend="corba")
+planner = create_planner(backend="pyhpp")
+
+# Planner provides unified methods
+robot = planner.get_robot()
+ps = planner.get_problem_solver()
+planner.visualize(q_config)
+```
+
+#### **SceneBuilder - Fluent Scene Setup**
+
+```python
+from agimus_spacelab.planning import SceneBuilder
+
+# Quick setup
+builder = SceneBuilder(backend="corba")
+planner, robot, ps = builder.build(
     objects=["frame_gripper", "RS1"],
     validation_step=0.01
 )
 
-# Step-by-step setup (same API for both backends)
-scene_builder = (SpaceLabSceneBuilder(backend="pyhpp")
+# Step-by-step (fluent API)
+builder = (SceneBuilder(backend="pyhpp")
     .load_robot()
     .load_environment()
     .load_objects(["frame_gripper", "RS1"])
     .set_joint_bounds()
     .configure_path_validation(0.01, 0.1))
 
-planner, robot, ps = scene_builder.get_instances()
+planner, robot, ps = builder.get_instances()
 ```
 
-**Backend-agnostic methods:**
-- `load_robot()` - Loads robot model
-- `load_environment()` - Loads environment
-- `load_objects()` - Loads manipulatable objects
-- `set_joint_bounds()` - Sets joint limits
-- `configure_path_validation()` - Configures validation parameters
-- `get_instances()` - Returns (planner, robot, ps/problem)
-
-#### **ConstraintBuilder**
-
-Helper for creating manipulation constraints:
+#### **ConstraintBuilder - Constraint Creation**
 
 ```python
-from spacelab_tools import ConstraintBuilder
+from agimus_spacelab.planning import ConstraintBuilder
 
-# Grasp constraint
+# Grasp constraint (tool relative to gripper)
 ConstraintBuilder.create_grasp_constraint(
-    ps, "grasp", gripper_name, tool_name, transform, mask
+    ps, "grasp", gripper_name, tool_name, transform, mask,
+    robot=robot, backend="corba"
 )
 
-# Placement constraint
+# Placement constraint (tool in world frame)
 ConstraintBuilder.create_placement_constraint(
-    ps, "placement", tool_name, world_pose, mask
+    ps, "placement", tool_name, world_pose, mask,
+    robot=robot, backend="corba"
 )
 
 # Complement constraint (for security margins)
 ConstraintBuilder.create_complement_constraint(
-    ps, "complement", tool_name, world_pose, complement_mask
+    ps, "placement", tool_name, world_pose, complement_mask,
+    robot=robot, backend="corba"
 )
 ```
 
-#### **ConfigurationGenerator**
-
-Manages configuration generation and projection (works with both backends):
+#### **ConfigGenerator - Configuration Generation**
 
 ```python
-from spacelab_tools import ConfigurationGenerator
+from agimus_spacelab.planning import ConfigGenerator
 
-# Backend is automatically detected from graph type
-config_gen = ConfigurationGenerator(robot, graph, ps, backend="corba")
+config_gen = ConfigGenerator(robot, graph, ps)
 
 # Project onto constraint graph node
-config_gen.project_on_node("placement", q_init, config_label="q_init")
+config_gen.project_on_node("placement", q_init, "q_init")
 
-# Generate configuration via edge (same API for both backends)
+# Generate configuration via edge
 success, q_target = config_gen.generate_via_edge(
-    "approach-tool", q_from, config_label="q_approach"
+    "approach-tool", config_gen.configs["q_init"], "q_approach"
 )
 
 # Modify object pose
 q_new = config_gen.modify_object_pose(
     q, object_index=0, translation_delta=[0.2, 0.0, 0.0]
 )
+
+# Access generated configs
+all_configs = config_gen.configs  # Dict[str, List[float]]
 ```
 
-#### **ManipulationTask** (Base Class)
+---
 
-Abstract base for task implementation with backend support:
+### 3. Tasks (`agimus_spacelab.tasks`)
+
+Task abstractions and orchestration.
+
+#### **ManipulationTask - Base Class**
 
 ```python
-from spacelab_tools import ManipulationTask
+from agimus_spacelab.tasks import ManipulationTask
 
-class MyTask(ManipulationTask):
+class GraspTask(ManipulationTask):
     def __init__(self, backend="corba"):
-        super().__init__("My Task", backend=backend)
+        super().__init__("Grasp Task", backend=backend)
     
     def get_objects(self) -> List[str]:
         return ["frame_gripper"]
         
     def create_constraints(self) -> None:
-        # Create constraints using ConstraintBuilder
-        # Same code for both backends!
-        pass
+        ConstraintBuilder.create_grasp_constraint(
+            self.ps, "grasp", self.gripper, self.tool,
+            self.transform, self.mask,
+            robot=self.robot, backend=self.backend
+        )
         
-    def create_graph(self) -> ConstraintGraph:
-        # Build constraint graph
-        # Backend-specific graph types handled internally
+    def create_graph(self):
+        # Build constraint graph (backend-specific)
         pass
         
     def generate_configurations(self, q_init) -> Dict:
-        # Generate waypoint configs using ConfigurationGenerator
-        # Unified API for both backends
-        pass
+        return self.config_gen.configs
 
-# Usage with either backend
-task_corba = MyTask(backend="corba")
-task_pyhpp = MyTask(backend="pyhpp")
+# Run with either backend
+task = GraspTask(backend="corba")
+task.setup()
+result = task.run(visualize=True, solve=False)
 ```
 
----
+#### **TaskOrchestrator - Multi-Task Execution**
 
-### 3. Task Orchestration (`task_orchestration.py`)
-
-Multi-arm task coordination framework.
-
-#### **Key Classes:**
-
-**AtomicTask**: Indivisible manipulation action
 ```python
-from task_orchestration import AtomicTask, Resource, ResourceType
+from agimus_spacelab.tasks import TaskOrchestrator, TaskBuilder
 
+orchestrator = TaskOrchestrator(max_concurrent_tasks=2)
+orchestrator.setup_resources(
+    arms=["UR10", "VISPA"],
+    objects=["RS1", "RS2"]
+)
+
+# Build tasks with fluent API
+t1 = (TaskBuilder("t1", "UR10 grasp RS1")
+    .requires_arm("UR10")
+    .requires_object("RS1")
+    .with_execution(grasp_rs1_fn)
+    .build())
+
+t2 = (TaskBuilder("t2", "VISPA grasp RS2")
+    .requires_arm("VISPA")
+    .requires_object("RS2")
+    .with_execution(grasp_rs2_fn)
+    .build())
+
+orchestrator.add_task(t1)
+orchestrator.add_task(t2)
+orchestrator.run()  # Parallel execution
+```
+
+#### **AtomicTask - Low-Level Task Definition**
+
+```python
+from agimus_spacelab.tasks.orchestration import (
+    AtomicTask, Resource, ResourceType
+)
 
 task = AtomicTask(
     task_id="t1",
@@ -330,32 +393,105 @@ task = AtomicTask(
 )
 ```
 
-**TaskOrchestrator**: Executes tasks respecting dependencies
-```python
-from task_orchestration import TaskOrchestrator, TaskBuilder
+---
 
-orchestrator = TaskOrchestrator(max_concurrent_tasks=2)
-orchestrator.setup_resources(
-    arms=["UR10", "VISPA"],
-    objects=["RS1", "RS2"]
+### 4. Visualization (`agimus_spacelab.visualization`)
+
+Scene and graph visualization utilities.
+
+```python
+from agimus_spacelab.visualization import (
+    visualize_constraint_graph,
+    print_joint_info,
+    displayHandle,
+    displayGripper,
+    displayHandleApproach,
+    displayGripperApproach,
+    visualize_all_handles,
+    visualize_all_grippers,
+    clear_all_visualizations,
 )
 
-# Add tasks using builder
-t1 = TaskBuilder("t1", "UR10 grasp RS1").requires_arm("UR10").build()
-t2 = TaskBuilder("t2", "VISPA grasp RS2").requires_arm("VISPA").build()
+# Generate constraint graph diagram
+visualize_constraint_graph(graph, output_path="graph.png")
 
-orchestrator.add_task(t1)
-orchestrator.add_task(t2)
-orchestrator.run()  # Executes in parallel
+# Print robot joint info
+print_joint_info(robot)
+
+# Display handle/gripper frames in viewer
+displayHandle(viewer, "frame_gripper/h_FG_tool")
+displayGripper(viewer, "spacelab/g_ur10_tool")
+
+# Visualize approach directions
+displayHandleApproach(viewer, "frame_gripper/h_FG_tool")
+displayGripperApproach(viewer, "spacelab/g_ur10_tool")
+
+# Batch visualization
+visualize_all_handles(viewer, handle_names, show_approach=True)
+visualize_all_grippers(viewer, gripper_names, show_approach=True)
+
+# Cleanup
+clear_all_visualizations(viewer)
 ```
 
 ---
 
-### 4. Scene Visualization (`visualize_scene.py`)
+### 5. Configuration (`script/config/spacelab_config.py`)
+
+Centralized configuration for SpaceLab tasks.
+
+```python
+from spacelab_config import (
+    InitialConfigurations,
+    ManipulationConfig,
+    RobotJoints,
+    JointBounds,
+)
+
+# Robot initial configurations
+q_ur10 = InitialConfigurations.UR10
+q_vispa = InitialConfigurations.VISPA_BASE + InitialConfigurations.VISPA_ARM
+
+# Object poses (XYZRPY)
+pose_fg = InitialConfigurations.FRAME_GRIPPER
+pose_rs1 = InitialConfigurations.RS1
+
+# Gripper-handle pairs
+pairs = ManipulationConfig.VALID_PAIRS["ur10_gripper"]
+
+# Joint bounds
+bounds = JointBounds.FREEFLYER_BOUNDS
+```
+
+---
+
+### 6. Utilities (`agimus_spacelab.utils`)
+
+Transform and helper functions.
+
+```python
+from agimus_spacelab.utils import (
+    xyzrpy_to_se3,
+    xyzrpy_to_xyzquat,
+    se3_to_xyzrpy,
+)
+
+# Convert XYZRPY to SE3
+se3_pose = xyzrpy_to_se3([x, y, z, roll, pitch, yaw])
+
+# Convert XYZRPY to XYZQUAT (for configurations)
+xyzquat = xyzrpy_to_xyzquat([x, y, z, roll, pitch, yaw])
+
+# Convert SE3 back to XYZRPY
+xyzrpy = se3_to_xyzrpy(se3_pose)
+```
+
+---
+
+### 7. Scene Visualization Script
 
 Interactive scene visualization with gepetto-viewer.
 
-**Usage:**
 ```bash
 # Load complete scene
 python visualize_scene.py
@@ -486,8 +622,8 @@ python example_collaborative_assembly.py
 ### Pattern 1: Single-Arm Task
 
 ```python
-from spacelab_tools import ManipulationTask, SpaceLabSceneBuilder
-from spacelab_tools import ConstraintBuilder, ConfigurationGenerator
+from agimus_spacelab.tasks import ManipulationTask
+from agimus_spacelab.planning import SceneBuilder, ConstraintBuilder, ConfigGenerator
 
 class GraspRS1Task(ManipulationTask):
     def __init__(self, backend="corba"):
@@ -532,7 +668,7 @@ if __name__ == "__main__":
 ### Pattern 2: Multi-Arm Collaboration
 
 ```python
-from task_orchestration import TaskOrchestrator, TaskBuilder
+from agimus_spacelab.tasks import TaskOrchestrator, TaskBuilder
 
 # Setup orchestrator
 orchestrator = TaskOrchestrator(max_concurrent_tasks=2)

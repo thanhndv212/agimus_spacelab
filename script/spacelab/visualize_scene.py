@@ -23,8 +23,7 @@ from typing import List, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
 
 from spacelab_config import InitialConfigurations, RobotJoints
-from spacelab_tools import SpaceLabSceneBuilder
-from agimus_spacelab.backends import CorbaBackend as CorbaManipulationPlanner
+from agimus_spacelab.planning import SceneBuilder
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 try:
@@ -54,7 +53,7 @@ class SceneVisualizer:
         """
         print("\n" + "="*70)
         print("SPACELAB SCENE SETUP")
-        print("="*70)
+        print("=" * 70)
         
         # Default objects if none specified
         if objects is None:
@@ -64,7 +63,7 @@ class SceneVisualizer:
             ]
         
         # Build scene using fluent API
-        builder = SpaceLabSceneBuilder()
+        builder = SceneBuilder()
         
         print("\n1. Loading robots and environment...")
         builder.load_robot()
