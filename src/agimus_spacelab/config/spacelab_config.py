@@ -13,7 +13,7 @@ DEFAULT_PATHS = {
             "srdf": "package://spacelab_mock_hardware/description/srdf/allRobots_spacelab_robot.srdf",
             }
     },
-    "environment": "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf",
+    "environment": {"ground_demo": "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf"},
     "objects": {
         "RS1": "package://spacelab_mock_hardware/description/urdf/RS1.urdf",
         "RS2": "package://spacelab_mock_hardware/description/urdf/RS2.urdf",
