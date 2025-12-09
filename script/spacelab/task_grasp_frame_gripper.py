@@ -109,11 +109,19 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         self.config = GraspFrameGripperConfig
         self.use_factory = use_factory
-        self.robot_names = self.config.ROBOT_NAMES
-        self.composite_names = self.config.ROBOT_NAMES
-        self.object_names = self.config.OBJECTS
-        self.environment_names = self.config.ENVIRONMENT_NAMES
-
+        
+    def get_robot_names(self) -> List[str]:
+        return self.config.ROBOT_NAMES
+    
+    def get_composite_names(self) -> List[str]:
+        return self.config.ROBOT_NAMES
+    
+    def get_object_names(self) -> List[str]:
+        return self.config.OBJECTS
+    
+    def get_environment_names(self) -> List[str]:
+        return self.config.ENVIRONMENT_NAMES
+        
     def get_joint_groups(self) -> List[str]:
         """Return joint groups from configuration."""
         return self.config.ROBOTS
