@@ -22,7 +22,12 @@ from typing import List, Dict
 
 from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
-from agimus_spacelab.visualization import print_joint_info, visualize_constraint_graph, displayHandle, displayGripper
+from agimus_spacelab.visualization import (
+    print_joint_info,
+    visualize_constraint_graph,
+    visualize_all_handles,
+    visualize_all_grippers,
+)
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 # Add config directory
@@ -556,21 +561,39 @@ def main(
         print("=" * 70)
         viewer = result['viewer']
         
-        # Display handle
+        # Collect all handle names
         handle_names = [
             handle
             for handles in GraspFrameGripperConfig.HANDLES_PER_OBJECT
             for handle in handles
         ]
-        for handle_name in handle_names:
-            if displayHandle(viewer, handle_name):
-                print("    ✓ Handle frame displayed")
         
-        # Display gripper
+        # Visualize handles with approach arrows
+        print("\n  Handles (green frames, cyan approach arrows):")
+        visualize_all_handles(
+            viewer, handle_names,
+            show_approach=True,
+            frame_color=[0, 0.8, 0, 1],   # Green
+            arrow_color=[0, 1, 1, 1],      # Cyan
+            axis_length=0.05,
+            arrow_length=0.1
+        )
+        for handle_name in handle_names:
+            print(f"    ✓ {handle_name}")
+        
+        # Visualize grippers with approach arrows
         gripper_names = GraspFrameGripperConfig.GRIPPERS
+        print("\n  Grippers (red frames, orange approach arrows):")
+        visualize_all_grippers(
+            viewer, gripper_names,
+            show_approach=True,
+            frame_color=[1, 0, 0, 1],      # Red
+            arrow_color=[1, 0.5, 0, 1],    # Orange
+            axis_length=0.05,
+            arrow_length=0.1
+        )
         for gripper_name in gripper_names:
-            if displayGripper(viewer, gripper_name):
-                print("    ✓ Gripper frame displayed")
+            print(f"    ✓ {gripper_name}")
         
         viewer.client.gui.refresh()
     
