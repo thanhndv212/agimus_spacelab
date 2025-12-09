@@ -109,7 +109,11 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         self.config = GraspFrameGripperConfig
         self.use_factory = use_factory
-        
+    
+    def get_joint_groups(self) -> List[str]:
+        """Return joint groups from configuration."""
+        return self.config.ROBOTS
+
     def get_objects(self) -> List[str]:
         """Return list of objects from configuration."""
         return self.config.OBJECTS

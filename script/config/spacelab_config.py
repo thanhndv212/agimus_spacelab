@@ -11,6 +11,9 @@ class TaskConfigurations:
     class GraspFrameGripper:
         """Configuration for UR10 grasping frame_gripper from dispenser."""
         
+        # Joint groups
+        ROBOTS = ["UR10", "VISPA_BASE", "VISPA_ARM"]
+
         # Transform configurations (in xyzquat format)
         TOOL_IN_GRIPPER = [0.0, 0.0, 0.1, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
         GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.2, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
