@@ -104,7 +104,7 @@ class GraspFrameGripperTask(ManipulationTask):
             backend: "corba" or "pyhpp" - which backend to use
         """
         super().__init__(
-            "Spacelab Manipulation: UR10 Grasps Frame Gripper",
+            task_name="Spacelab Manipulation: UR10 Grasps Frame Gripper",
             backend=backend
         )
         self.config = GraspFrameGripperConfig
