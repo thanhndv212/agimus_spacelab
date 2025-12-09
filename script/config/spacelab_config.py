@@ -11,6 +11,10 @@ class TaskConfigurations:
     class GraspFrameGripper:
         """Configuration for UR10 grasping frame_gripper from dispenser."""
         
+        # Robot name
+        ROBOT_NAMES = ["spacelab"]
+        ENVIRONMENT_NAMES = ["ground_demo"]
+
         # Joint groups
         ROBOTS = ["UR10", "VISPA_BASE", "VISPA_ARM"]
 
@@ -56,18 +60,6 @@ class TaskConfigurations:
         
         # Grippers (for factory mode)
         GRIPPERS = ["spacelab/g_ur10_tool"]
-        
-        # Objects in scene
-        OBJECTS = [
-            "frame_gripper",
-            "screw_driver",
-            "RS1",
-            "RS2",
-            "RS3",
-            "RS4",
-            "RS5",
-            "RS6"
-        ]
         
         # Handles per object (for factory mode)
         HANDLES_PER_OBJECT = [
