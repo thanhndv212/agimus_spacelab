@@ -57,7 +57,7 @@ def main():
     
     planner = builder.planner
     robot = planner.get_robot()
-    ps = planner.get_problem_solver()
+    ps = planner.get_problem()
     
     # Build initial configuration
     print("\n2. Building initial configuration...")
