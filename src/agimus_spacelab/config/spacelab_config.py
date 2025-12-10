@@ -320,15 +320,15 @@ class ManipulationConfig:
     
     # Define valid gripper-handle pairs
     VALID_PAIRS = {
-        "ur10_gripper": [
+        "spacelab/g_ur10_tool": [
             "frame_gripper/h_FG_tool",
             "screw_driver/h_SD_tool",
         ],
-        "vispa_gripper": [
+        "spacelab/g_vispa_tool": [
             "frame_gripper/h_FG_tool",
             "screw_driver/h_SD_tool",
         ],
-        "vispa2_gripper": [
+        "spacelab/g_vispa2_wb1": [
             "RS1/h_RS1_WB",
             "RS2/h_RS2_WB",
             "RS3/h_RS3_WB",
@@ -336,7 +336,7 @@ class ManipulationConfig:
             "RS5/h_RS5_WB",
             "RS6/h_RS6_WB",
         ],
-        "frame_gripper": [
+        "frame_gripper/g_FG_part": [
             "RS1/h_RS1_FG",
             "RS2/h_RS2_FG",
             "RS3/h_RS3_FG",
@@ -344,7 +344,7 @@ class ManipulationConfig:
             "RS5/h_RS5_FG",
             "RS6/h_RS6_FG",
         ],
-        "screw_driver": [
+        "screw_driver/g_SD_part": [
             "RS1/h_RS1_CON0",
             "RS1/h_RS1_CON1",
             "RS1/h_RS1_CON2",

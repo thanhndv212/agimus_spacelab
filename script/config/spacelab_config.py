@@ -79,7 +79,11 @@ class TaskConfigurations:
             ["RS5/h_RS5_FG"],              # RS5
             ["RS6/h_RS6_FG"],              # RS6
         ]
-        
+        VALID_PAIRS = {
+        "spacelab/g_ur10_tool": [
+            "frame_gripper/h_FG_tool",
+            "screw_driver/h_SD_tool",
+        ],}
         # Tool poses (computed from initial config)
         TOOL_ON_DISPENSER = None
         TOOL_IN_AIR = None
