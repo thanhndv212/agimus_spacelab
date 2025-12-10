@@ -150,11 +150,6 @@ class GraspFrameGripperTask(ManipulationTask):
         if self.use_factory:
             print("    (Factory mode: constraints created automatically)")
             return
-        
-        # PyHPP uses different constraint creation
-        if self.backend == "pyhpp":
-            self.pyhpp_constraints = self._create_pyhpp_constraints()
-            return
             
         cb = ConstraintBuilder
         cfg = self.config
@@ -210,35 +205,31 @@ class GraspFrameGripperTask(ManipulationTask):
     def create_graph(self):
         """Create and configure constraint graph."""
         if self.use_factory:
-            if self.backend == "corba":
-                return self._create_corba_graph_with_factory()
-            if self.backend == "pyhpp":
-                return self._create_pyhpp_graph_with_factory()
+        # """Create graph using ConstraintGraphFactory (automatic)."""
+            cfg = self.config
+            
+            # Initialize GraphBuilder
+            self.graph_builder = GraphBuilder(
+                self.planner, self.robot, self.ps, backend=self.backend
+            )
+            
+            # Create factory graph
+            graph = self.graph_builder.create_factory_graph(
+                grippers=cfg.GRIPPERS,
+                objects=cfg.OBJECTS,
+                handles_per_object=cfg.HANDLES_PER_OBJECT,
+                environment_contacts=["ground_demo/tools_dispenser_surface"],
+                valid_pairs=cfg.VALID_PAIRS
+            )
+            
+            return graph
+
         else:
             if self.backend == "corba":
                 return self._create_corba_graph_manual()
             if self.backend == "pyhpp":
                 return self._create_pyhpp_graph_manual()
-    
-    def _create_corba_graph_with_factory(self):
-        """Create graph using ConstraintGraphFactory (automatic)."""
-        cfg = self.config
-        
-        # Initialize GraphBuilder
-        self.graph_builder = GraphBuilder(
-            self.planner, self.robot, self.ps, backend=self.backend
-        )
-        
-        # Create factory graph
-        graph = self.graph_builder.create_factory_graph(
-            grippers=cfg.GRIPPERS,
-            objects=cfg.OBJECTS,
-            handles_per_object=cfg.HANDLES_PER_OBJECT,
-            environment_contacts=["ground_demo/tools_dispenser_surface"],
-            valid_pairs=cfg.VALID_PAIRS
-        )
-        
-        return graph
+
             
     def generate_configurations(
         self, q_init: List[float]
