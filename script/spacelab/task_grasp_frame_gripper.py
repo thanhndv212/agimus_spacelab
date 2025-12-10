@@ -148,11 +148,7 @@ class GraspFrameGripperTask(ManipulationTask):
         """Create all transformation constraints."""
         # Factory mode creates constraints automatically
         if self.use_factory:
-            if self.backend == "pyhpp":
-                # PyHPP factory needs placement constraints
-                self.pyhpp_constraints = self._create_pyhpp_placement_constraints()
-            else:
-                print("    (Factory mode: constraints created automatically)")
+            print("    (Factory mode: constraints created automatically)")
             return
         
         # PyHPP uses different constraint creation
