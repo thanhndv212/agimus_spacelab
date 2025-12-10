@@ -226,210 +226,23 @@ class GraspFrameGripperTask(ManipulationTask):
     
     def _create_corba_graph_with_factory(self):
         """Create graph using ConstraintGraphFactory (automatic)."""
-        print(
-            "    Using ConstraintGraphFactory for automatic graph generation"
-        )
-        
-        # CORBA backend
-        graph = ConstraintGraph(self.robot, "graph")
-        factory = ConstraintGraphFactory(graph)
-        
-        # Set grippers
-        grippers = self.config.GRIPPERS
-        factory.setGrippers(grippers)
-        print(f"    ✓ Set grippers: {grippers}")
-        
-        # Set objects with handles and contact surfaces
-        objects = self.config.OBJECTS
-        handles_per_object = self.config.HANDLES_PER_OBJECT
-        contact_surfaces_per_object = [[] for _ in objects]  # No contact surfaces for now
-        factory.setObjects(
-            objects, handles_per_object, contact_surfaces_per_object
-        )
-        print(f"    ✓ Set objects: {objects}")
-        
-        # Set environment contacts (dispenser surface)
-        env_contacts = ["ground_demo/tools_dispenser_surface"]
-        factory.environmentContacts(env_contacts)
-        print(f"    ✓ Set environment contacts: {env_contacts}")
-        
-        # Set rules (allow all gripper-handle pairs)
-        rules = [Rule([".*"], [".*"], True)]
-        factory.setRules(rules)
-        print("    ✓ Set rules: allow all")
-        
-        # Generate graph
-        factory.generate()
-        print("    ✓ Generated graph structure")
-        
-        # Initialize graph (factory creates edges automatically)
-        graph.initialize()
-        print("    ✓ Graph initialized")
-        
-        # Print factory-generated nodes for reference
-        print(f"    ℹ Factory created {len(graph.nodes)} nodes:")
-        for node_name in list(graph.nodes.keys())[:5]:  # Show first 5
-            print(f"      - {node_name}")
-        if len(graph.nodes) > 5:
-            print(f"      ... and {len(graph.nodes) - 5} more")
-        
-        return graph
-
-    def _create_corba_graph_manual(self):
-        """Create graph manually (original implementation)."""
-        print("    Building graph manually")
-        
-        graph = ConstraintGraph(self.robot, "graph")
         cfg = self.config
         
-        # Create nodes
-        graph.createNode(cfg.GRAPH_NODES)
-        print(f"    ✓ Created {len(cfg.GRAPH_NODES)} states")
-        
-        # Create edges
-        self._create_edges(graph)
-        print("    ✓ Created edges (transitions)")
-        
-        # Assign node constraints
-        self._assign_node_constraints(graph)
-        print("    ✓ Added constraints to nodes")
-        
-        # Assign edge constraints
-        self._assign_edge_constraints(graph)
-        print("    ✓ Added constraints to edges")
-        
-        # Set constant RHS
-        self.ps.setConstantRightHandSide("placement", True)
-        self.ps.setConstantRightHandSide("placement/complement", False)
-        self.ps.setConstantRightHandSide("tool_in_air/complement", False)
-        print("    ✓ Set constant right-hand side")
-        
-        # Set security margins BEFORE initialize
-        self._set_security_margins(graph)
-        print(
-            f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
-            "for placement edges"
+        # Initialize GraphBuilder
+        self.graph_builder = GraphBuilder(
+            self.planner, self.robot, self.ps, backend=self.backend
         )
         
-        # Initialize graph
-        graph.initialize()
-        print("    ✓ Graph initialized")
+        # Create factory graph
+        graph = self.graph_builder.create_factory_graph(
+            grippers=cfg.GRIPPERS,
+            objects=cfg.OBJECTS,
+            handles_per_object=cfg.HANDLES_PER_OBJECT,
+            environment_contacts=["ground_demo/tools_dispenser_surface"],
+            valid_pairs=cfg.VALID_PAIRS
+        )
         
         return graph
-        
-    def _create_edges(self, graph):
-        """Create all state transitions."""
-        # Self-loops
-        graph.createEdge(
-            'placement', 'placement', 'transit', 1, 'placement'
-        )
-        graph.createEdge('grasp', 'grasp', 'transfer', 1, 'grasp')
-        
-        # From placement
-        graph.createEdge(
-            'placement', 'gripper-above-tool', 'approach-tool',
-            1, 'placement'
-        )
-        
-        # From gripper-above-tool
-        graph.createEdge(
-            'gripper-above-tool', 'placement', 'move-gripper-away',
-            1, 'placement'
-        )
-        graph.createEdge(
-            'gripper-above-tool', 'grasp-placement', 'grasp-tool',
-            1, 'placement'
-        )
-        
-        # From grasp-placement
-        graph.createEdge(
-            'grasp-placement', 'gripper-above-tool', 'release-tool',
-            1, 'placement'
-        )
-        graph.createEdge(
-            'grasp-placement', 'tool-in-air', 'lift-tool', 1, 'grasp'
-        )
-        
-        # From tool-in-air
-        graph.createEdge(
-            'tool-in-air', 'grasp-placement', 'lower-tool', 1, 'grasp'
-        )
-        graph.createEdge(
-            'tool-in-air', 'grasp', 'move-tool-away', 1, 'grasp'
-        )
-        
-        # From grasp
-        graph.createEdge(
-            'grasp', 'tool-in-air', 'approach-dispenser', 1, 'grasp'
-        )
-        
-    def _assign_node_constraints(self, graph):
-        """Assign constraints to states."""
-        graph.addConstraints(
-            node="placement",
-            constraints=Constraints(numConstraints=["placement"])
-        )
-        
-        graph.addConstraints(
-            node="gripper-above-tool",
-            constraints=Constraints(
-                numConstraints=["placement", "gripper_tool_aligned"]
-            )
-        )
-        
-        graph.addConstraints(
-            node="grasp-placement",
-            constraints=Constraints(numConstraints=["grasp", "placement"])
-        )
-        
-        graph.addConstraints(
-            node="tool-in-air",
-            constraints=Constraints(numConstraints=["grasp", "tool_in_air"])
-        )
-        
-        graph.addConstraints(
-            node="grasp",
-            constraints=Constraints(numConstraints=["grasp"])
-        )
-        
-    def _assign_edge_constraints(self, graph):
-        """Assign path constraints to edges."""
-        # Edges with placement/complement (tool on surface)
-        placement_edges = [
-            "transit", "approach-tool", "move-gripper-away",
-            "grasp-tool", "release-tool"
-        ]
-        for edge in placement_edges:
-            graph.addConstraints(
-                edge=edge,
-                constraints=Constraints(
-                    numConstraints=["placement/complement"]
-                )
-            )
-            
-        # Edges with tool_in_air/complement
-        for edge in ["lift-tool", "lower-tool"]:
-            graph.addConstraints(
-                edge=edge,
-                constraints=Constraints(
-                    numConstraints=["tool_in_air/complement"]
-                )
-            )
-            
-        # Free motion edges
-        for edge in ["transfer", "move-tool-away", "approach-dispenser"]:
-            graph.addConstraints(edge=edge, constraints=Constraints())
-            
-    def _set_security_margins(self, graph):
-        """Set security margins for surface contact edges."""
-        cfg = self.config
-        for edge_name in cfg.PLACEMENT_EDGES:
-            graph.setSecurityMarginForEdge(
-                edge_name,
-                cfg.TOOL_CONTACT_JOINT,
-                cfg.DISPENSER_CONTACT_JOINT,
-                cfg.CONTACT_MARGIN
-            )
             
     def generate_configurations(
         self, q_init: List[float]
@@ -609,8 +422,6 @@ def main(
 
     print("\nTo visualize specific configs:")
     print("  task.planner.visualize(result['configs']['q_init'])")
-    print("  task.planner.visualize(result['configs']['q_above'])")
-    print("  task.planner.visualize(result['configs']['q_goal'])")
 
     if solve:
         print("\nTo replay path:")
