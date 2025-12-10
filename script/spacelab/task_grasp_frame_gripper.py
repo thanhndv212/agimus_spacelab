@@ -236,22 +236,24 @@ class GraspFrameGripperTask(ManipulationTask):
     ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
         # Factory mode creates different node/edge names
-        # For now, just return initial config for factory mode
-        if self.use_factory:
-            print("    Factory mode: Using initial configuration only")
-            print("    (Detailed waypoint generation not yet implemented)")
-            return {"q_init": q_init}
-        
-        # PyHPP uses different configuration generation API
-        if self.backend == "pyhpp":
-            return self._generate_configs_pyhpp(q_init)
-        
+        # For now, just return initial config for factory mode        
         cg = self.config_gen
         cfg = self.config
-        
+
+                    
         # Update max attempts
         cg.max_attempts = cfg.MAX_RANDOM_ATTEMPTS
         
+        if self.use_factory:
+            print("    Factory mode: Using initial configuration only")
+            q_goal_modified = cg.modify_object_pose(
+                q_init,
+                object_index=0,  # frame_gripper is first object
+                translation_delta=[0.2, 0.0, 0.0]
+            )
+            return {"q_init": q_init,
+                    "q_goal": q_goal_modified}
+                
         # 1. Project initial onto placement
         print("    1. Projecting onto 'placement' state...")
         cg.project_on_node("placement", q_init, "q_init")
