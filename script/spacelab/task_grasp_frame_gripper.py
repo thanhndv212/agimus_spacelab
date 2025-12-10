@@ -28,60 +28,12 @@ from agimus_spacelab.visualization import (
     visualize_all_handles,
     visualize_all_grippers,
 )
-from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 # Add config directory
 config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
 
 from spacelab_config import TaskConfigurations
-
-# Import backend availability flags for validation
-try:
-    from agimus_spacelab.backends import get_available_backends
-    _available = get_available_backends()
-    HAS_CORBA = 'corba' in _available
-    HAS_PYHPP = 'pyhpp' in _available
-except ImportError:
-    HAS_CORBA = False
-    HAS_PYHPP = False
-
-# CORBA-specific imports for manual graph building (when not using factory)
-try:
-    from hpp.corbaserver.manipulation import (
-        ConstraintGraph,
-        ConstraintGraphFactory,
-        Constraints,
-        Rule,
-    )
-except ImportError:
-    ConstraintGraph = None
-    ConstraintGraphFactory = None
-    Constraints = None
-    Rule = None
-
-# PyHPP-specific imports for manual graph building
-try:
-    from pyhpp.manipulation import Graph
-    from pyhpp.manipulation.constraint_graph_factory import (
-        ConstraintGraphFactory as PyHPPConstraintGraphFactory,
-        Rule as PyHPPRule
-    )
-    from pyhpp.constraints import (
-        RelativeTransformation,
-        Transformation,
-        ComparisonTypes,
-        ComparisonType,
-        Implicit,
-    )
-    from pinocchio import SE3, StdVec_Bool as Mask
-    import numpy as np
-except ImportError:
-    Graph = None
-    PyHPPConstraintGraphFactory = None
-    PyHPPRule = None
-    RelativeTransformation = None
-    Transformation = None
 
 
 # ============================================================================
@@ -306,7 +258,6 @@ class GraspFrameGripperTask(ManipulationTask):
             translation_delta=[0.2, 0.0, 0.0]
         )
         cg.project_on_node("placement", q_goal_modified, "q_goal")
-        
         return cg.configs
 
 
@@ -331,15 +282,7 @@ def main(
         use_factory: Use ConstraintGraphFactory (automatic) instead of
             manual graph
         backend: "corba" or "pyhpp" - which backend to use
-    """
-    # Validate backend availability
-    if backend == "corba" and not HAS_CORBA:
-        print("Error: CORBA backend not available")
-        return None
-    elif backend == "pyhpp" and not HAS_PYHPP:
-        print("Error: PyHPP backend not available. Install pyhpp.")
-        return None
-        
+    """ 
     print(f"Using backend: {backend.upper()}")
     
     # Create and setup task
