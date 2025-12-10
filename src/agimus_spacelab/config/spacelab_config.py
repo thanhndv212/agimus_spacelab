@@ -13,17 +13,46 @@ DEFAULT_PATHS = {
             "srdf": "package://spacelab_mock_hardware/description/srdf/allRobots_spacelab_robot.srdf",
             }
     },
-    "environment": {"ground_demo": "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf"},
+    "environment": {
+        "ground_demo": "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf"
+    },
     "objects": {
-        "RS1": "package://spacelab_mock_hardware/description/urdf/RS1.urdf",
-        "RS2": "package://spacelab_mock_hardware/description/urdf/RS2.urdf",
-        "RS3": "package://spacelab_mock_hardware/description/urdf/RS3.urdf",
-        "RS4": "package://spacelab_mock_hardware/description/urdf/RS4.urdf",
-        "RS5": "package://spacelab_mock_hardware/description/urdf/RS5.urdf",
-        "RS6": "package://spacelab_mock_hardware/description/urdf/RS6.urdf",
-        "screw_driver": "package://spacelab_mock_hardware/description/urdf/screw_driver.urdf",
-        "frame_gripper": "package://spacelab_mock_hardware/description/urdf/frame_gripper.urdf",
-        "cleat_gripper": "package://spacelab_mock_hardware/description/urdf/cleat_gripper.urdf",
+        "RS1": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/RS1.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/RS1.srdf",
+        },
+        "RS2": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/RS2.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/RS2.srdf",
+        },
+        "RS3": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/RS3.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/RS3.srdf",
+        },
+        "RS4": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/RS4.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/RS4.srdf",
+        },
+        "RS5": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/RS5.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/RS5.srdf",
+        },
+        "RS6": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/RS6.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/RS6.srdf",
+        },
+        "screw_driver": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/screw_driver.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/screw_driver.srdf",
+        },
+        "frame_gripper": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/frame_gripper.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/frame_gripper.srdf",
+        },
+        "cleat_gripper": {
+            "urdf": "package://spacelab_mock_hardware/description/urdf/cleat_gripper.urdf",
+            "srdf": "package://spacelab_mock_hardware/description/srdf/cleat_gripper.srdf",
+        },
     }
 }
 
