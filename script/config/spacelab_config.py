@@ -15,19 +15,22 @@ class TaskConfigurations:
         ROBOT_NAMES = ["spacelab"]
         ENVIRONMENT_NAMES = ["ground_demo"]
         OBJECTS = ["frame_gripper",
-                   "screw_driver",
-                   "RS1",
-                   "RS2",
-                   "RS3",
-                   "RS4",
-                   "RS5",
-                   "RS6"]
+                #    "screw_driver",
+                #    "RS1",
+                #    "RS2",
+                #    "RS3",
+                #    "RS4",
+                #    "RS5",
+                #    "RS6"
+                   ]
         # Joint groups
         ROBOTS = ["UR10", "VISPA_BASE", "VISPA_ARM"]
 
         # Transform configurations (in xyzquat format)
-        TOOL_IN_GRIPPER = [0.0, 0.0, 0.1, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
-        GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.2, 0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
+        TOOL_IN_GRIPPER = [0.0, 0.0, 0.1,
+                           0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
+        GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.2,
+                              0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
         
         # Constraint masks (6 DOF: [x, y, z, rx, ry, rz])
         GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
@@ -71,18 +74,18 @@ class TaskConfigurations:
         # Handles per object (for factory mode)
         HANDLES_PER_OBJECT = [
             ["frame_gripper/h_FG_tool"],  # frame_gripper
-            ["screw_driver/h_SD_tool"],   # screw_driver
-            ["RS1/h_RS1_FG"],              # RS1
-            ["RS2/h_RS2_FG"],              # RS2
-            ["RS3/h_RS3_FG"],              # RS3
-            ["RS4/h_RS4_FG"],              # RS4
-            ["RS5/h_RS5_FG"],              # RS5
-            ["RS6/h_RS6_FG"],              # RS6
+            # ["screw_driver/h_SD_tool"],   # screw_driver
+            # ["RS1/h_RS1_FG"],              # RS1
+            # ["RS2/h_RS2_FG"],              # RS2
+            # ["RS3/h_RS3_FG"],              # RS3
+            # ["RS4/h_RS4_FG"],              # RS4
+            # ["RS5/h_RS5_FG"],              # RS5
+            # ["RS6/h_RS6_FG"],              # RS6
         ]
         VALID_PAIRS = {
         "spacelab/g_ur10_tool": [
             "frame_gripper/h_FG_tool",
-            "screw_driver/h_SD_tool",
+            # "screw_driver/h_SD_tool",
         ],}
         # Tool poses (computed from initial config)
         TOOL_ON_DISPENSER = None
