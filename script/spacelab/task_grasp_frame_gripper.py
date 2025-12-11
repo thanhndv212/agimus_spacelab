@@ -173,7 +173,13 @@ class GraspFrameGripperTask(ManipulationTask):
                 environment_contacts=["ground_demo/tools_dispenser_surface"],
                 valid_pairs=cfg.VALID_PAIRS
             )
-            
+            if self.backend == "pyhpp":
+                problem = self.planner.get_problem()
+                problem.constraintGraph(graph)
+                self.pyhpp_states = self.graph_builder.get_states()
+                self.pyhpp_edges = self.graph_builder.get_edges()
+                self.pyhpp_edge_topology = self.graph_builder.get_edge_topology()
+                
             return graph
 
         else:
