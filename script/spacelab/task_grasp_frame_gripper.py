@@ -313,14 +313,9 @@ def main(
         viewer = result['viewer']
         
         # Collect all handle names
-        handle_names = [
-            handle
-            for handles in GraspFrameGripperConfig.HANDLES_PER_OBJECT
-            for handle in handles
-        ]
+        handle_names = task.graph_builder.factory.handles
         
         # Visualize handles with approach arrows
-        print("\n  Handles (green frames, cyan approach arrows):")
         visualize_all_handles(
             viewer, handle_names,
             show_approach=True,
@@ -329,12 +324,9 @@ def main(
             axis_length=0.05,
             arrow_length=0.1
         )
-        for handle_name in handle_names:
-            print(f"    ✓ {handle_name}")
         
         # Visualize grippers with approach arrows
         gripper_names = GraspFrameGripperConfig.GRIPPERS
-        print("\n  Grippers (red frames, orange approach arrows):")
         visualize_all_grippers(
             viewer, gripper_names,
             show_approach=True,
@@ -343,20 +335,12 @@ def main(
             axis_length=0.05,
             arrow_length=0.1
         )
-        for gripper_name in gripper_names:
-            print(f"    ✓ {gripper_name}")
-        
         viewer.client.gui.refresh()
     
     # Print summary
     print("\n" + "=" * 70)
-    print("Task Complete!")
+    print("Results Summary")
     print("=" * 70)
-
-    configs = result["configs"]
-    print(f"\nGenerated {len(configs)} configurations:")
-    for name, q in configs.items():
-        print(f"  {name}: {len(q)} DOF")
 
     print("\nTo visualize specific configs:")
     print("  task.planner.visualize(result['configs']['q_init'])")
@@ -373,14 +357,12 @@ def main(
     edges_dict = getattr(task, 'pyhpp_edges', None)
     edge_topology = getattr(task, 'pyhpp_edge_topology', None)
     viz_path = visualize_constraint_graph(
-        task.graph,
+        task.graph_builder,
         output_path="constraint_graph",
         states_dict=states_dict,
         edges_dict=edges_dict,
         edge_topology=edge_topology
     )
-    if viz_path:
-        print(f"✓ Graph visualization saved to: {viz_path}")
     
     return task, result
 
@@ -419,10 +401,3 @@ if __name__ == "__main__":
         use_factory=args.factory,
         backend=args.backend
     )
-    
-    if task and result:
-        print("\n" + "=" * 70)
-        print("Available objects:")
-        print("=" * 70)
-        print("  task   - GraspFrameGripperTask instance")
-        print("  result - Dictionary with configs, planner, robot, ps, graph")
