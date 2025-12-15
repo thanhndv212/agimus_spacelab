@@ -19,6 +19,9 @@ Task features:
 import sys
 from pathlib import Path
 from typing import List, Dict
+from collections import deque
+
+import numpy as np
 
 from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
@@ -171,35 +174,230 @@ class GraspFrameGripperTask(ManipulationTask):
         
     def create_graph(self):
         """Create and configure constraint graph."""
-        if self.use_factory:
-            # Backend-specific objects
-            if self.backend == "pyhpp":
-                robot = self.planner.get_robot()
-                problem = self.planner.get_problem()
-            else:
-                robot = self.robot
-                problem = self.ps
+        # Backend-specific objects
+        if self.backend == "pyhpp":
+            robot = self.planner.get_robot()
+            problem = self.planner.get_problem()
+        else:
+            robot = self.robot
+            problem = self.ps
 
-            # Initialize GraphBuilder and build graph from task spec
-            self.graph_builder = GraphBuilder(
-                self.planner, robot, problem, backend=self.backend
-            )
+        # Always keep a GraphBuilder instance for visualization/introspection.
+        self.graph_builder = GraphBuilder(
+            self.planner, robot, problem, backend=self.backend
+        )
+
+        if self.use_factory:
             return self.graph_builder.build_graph_for_task(
                 _FactoryGraphTaskSpec, mode="factory"
             )
 
-        else:
-            if self.backend == "corba":
-                return self._create_corba_graph_manual()
-            if self.backend == "pyhpp":
-                return self._create_pyhpp_graph_manual()
+        if self.backend == "corba":
+            return self._create_corba_graph_manual()
+        if self.backend == "pyhpp":
+            raise NotImplementedError(
+                "Manual graph mode is not implemented for PyHPP in this "
+                "script. Use --factory with --backend pyhpp."
+            )
+
+        raise ValueError(f"Unsupported backend: {self.backend}")
+
+    def _create_corba_graph_manual(self):
+        """Create the manual CORBA graph using GraphBuilder helpers."""
+        print("    Building graph manually")
+
+        gb = self.graph_builder
+        cfg = self.config
+        gb.create_manual_graph(name="graph")
+
+        # Create nodes
+        gb.add_states(cfg.GRAPH_NODES)
+        print(f"    ✓ Created {len(cfg.GRAPH_NODES)} states")
+
+        # Create edges (transitions)
+        gb.add_edge("placement", "placement", "transit", 1, "placement")
+        gb.add_edge("grasp", "grasp", "transfer", 1, "grasp")
+
+        gb.add_edge(
+            "placement", "gripper-above-tool", "approach-tool", 1, "placement"
+        )
+        gb.add_edge(
+            "gripper-above-tool",
+            "placement",
+            "move-gripper-away",
+            1,
+            "placement",
+        )
+        gb.add_edge(
+            "gripper-above-tool",
+            "grasp-placement",
+            "grasp-tool",
+            1,
+            "placement",
+        )
+
+        gb.add_edge(
+            "grasp-placement",
+            "gripper-above-tool",
+            "release-tool",
+            1,
+            "placement",
+        )
+        gb.add_edge("grasp-placement", "tool-in-air", "lift-tool", 1, "grasp")
+
+        gb.add_edge("tool-in-air", "grasp-placement", "lower-tool", 1, "grasp")
+        gb.add_edge("tool-in-air", "grasp", "move-tool-away", 1, "grasp")
+
+        gb.add_edge("grasp", "tool-in-air", "approach-dispenser", 1, "grasp")
+        print("    ✓ Created edges (transitions)")
+
+        # Assign node constraints
+        gb.add_state_constraints(
+            "placement", constraints=[], constraint_names=["placement"]
+        )
+        gb.add_state_constraints(
+            "gripper-above-tool",
+            constraints=[],
+            constraint_names=["placement", "gripper_tool_aligned"],
+        )
+        gb.add_state_constraints(
+            "grasp-placement",
+            constraints=[],
+            constraint_names=["grasp", "placement"],
+        )
+        gb.add_state_constraints(
+            "tool-in-air",
+            constraints=[],
+            constraint_names=["grasp", "tool_in_air"],
+        )
+        gb.add_state_constraints(
+            "grasp", constraints=[], constraint_names=["grasp"]
+        )
+        print("    ✓ Added constraints to nodes")
+
+        # Assign edge (path) constraints
+        for edge in [
+            "transit",
+            "approach-tool",
+            "move-gripper-away",
+            "grasp-tool",
+            "release-tool",
+        ]:
+            gb.add_edge_constraints(
+                edge,
+                constraints=[],
+                constraint_names=["placement/complement"],
+            )
+
+        for edge in ["lift-tool", "lower-tool"]:
+            gb.add_edge_constraints(
+                edge,
+                constraints=[],
+                constraint_names=["tool_in_air/complement"],
+            )
+
+        for edge in ["transfer", "move-tool-away", "approach-dispenser"]:
+            gb.add_edge_constraints(edge, constraints=[], constraint_names=[])
+        print("    ✓ Added constraints to edges")
+
+        # Set constant RHS
+        self.ps.setConstantRightHandSide("placement", True)
+        self.ps.setConstantRightHandSide("placement/complement", False)
+        self.ps.setConstantRightHandSide("tool_in_air/complement", False)
+        print("    ✓ Set constant right-hand side")
+
+        # Set security margins BEFORE initialize
+        for edge_name in cfg.PLACEMENT_EDGES:
+            gb.graph.setSecurityMarginForEdge(
+                edge_name,
+                cfg.TOOL_CONTACT_JOINT,
+                cfg.DISPENSER_CONTACT_JOINT,
+                cfg.CONTACT_MARGIN,
+            )
+        print(
+            f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
+            "for placement edges"
+        )
+
+        # Initialize graph
+        gb.finalize_manual_graph()
+        print("    ✓ Graph initialized")
+        return gb.graph
+
+    def _factory_state_from_config(self, q: List[float]) -> str:
+        """Best-effort detection of the current factory state name."""
+        graph = self.graph
+
+        if self.backend == "corba" and hasattr(graph, "getNode"):
+            # CORBA: ConstraintGraph.getNode(config) returns a node name.
+            try:
+                return graph.getNode(list(q))
+            except Exception:
+                pass
+
+        if self.backend == "pyhpp" and hasattr(graph, "getState"):
+            try:
+                state = graph.getState(np.array(q))
+                name = getattr(state, "name", None)
+                if callable(name):
+                    return name()
+                if isinstance(name, str):
+                    return name
+            except Exception:
+                pass
+
+        # Fallback: guess a reasonable start state.
+        place_name = f"place_{self.config.OBJECTS[0]}"
+        if place_name in getattr(self.graph_builder, "states", {}):
+            return place_name
+        # As a last resort, return any state name.
+        states = list(getattr(self.graph_builder, "states", {}).keys())
+        return states[0] if states else ""
+
+    @staticmethod
+    def _bfs_edge_path(
+        start_state: str,
+        goal_state: str,
+        edge_topology: Dict[str, tuple[str, str]],
+    ) -> List[str]:
+        """Find a directed edge-name path from start_state to goal_state."""
+        adjacency: Dict[str, List[tuple[str, str]]] = {}
+        for edge_name, (src, dst) in edge_topology.items():
+            adjacency.setdefault(src, []).append((dst, edge_name))
+
+        queue: deque[str] = deque([start_state])
+        prev_state: Dict[str, str] = {}
+        prev_edge: Dict[str, str] = {}
+        visited = {start_state}
+
+        while queue:
+            state = queue.popleft()
+            if state == goal_state:
+                break
+            for nxt, edge_name in adjacency.get(state, []):
+                if nxt in visited:
+                    continue
+                visited.add(nxt)
+                prev_state[nxt] = state
+                prev_edge[nxt] = edge_name
+                queue.append(nxt)
+
+        if goal_state not in visited:
+            return []
+
+        # Reconstruct path
+        edges: List[str] = []
+        cur = goal_state
+        while cur != start_state:
+            edges.append(prev_edge[cur])
+            cur = prev_state[cur]
+        edges.reverse()
+        return edges
 
     def generate_configurations(
         self, q_init: List[float]
     ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
-        # Factory mode creates different node/edge names
-        # For now, just return initial config for factory mode
         cg = self.config_gen
         cfg = self.config
 
@@ -207,13 +405,61 @@ class GraspFrameGripperTask(ManipulationTask):
         cg.max_attempts = cfg.MAX_RANDOM_ATTEMPTS
         
         if self.use_factory:
-            print("    Factory mode: Using initial configuration only")
-            q_goal_modified = cg.modify_object_pose(
-                q_init,
-                object_index=0,  # frame_gripper is first object
-                translation_delta=[0.2, 0.0, 0.0]
+            print("    Factory mode: generating a pick+hold goal")
+
+            gripper = cfg.GRIPPERS[0]
+            handle = cfg.HANDLES_PER_OBJECT[0][0]
+            desired_grasp = f"{gripper} grasps {handle}"
+
+            all_states = list(self.graph_builder.get_states().keys())
+            goal_candidates = [s for s in all_states if s == desired_grasp]
+            if not goal_candidates:
+                goal_candidates = [s for s in all_states if desired_grasp in s]
+            if not goal_candidates:
+                raise RuntimeError(
+                    "Could not find a grasp state containing '%s'. "
+                    "Available states containing 'grasps': %s"
+                    % (
+                        desired_grasp,
+                        [s for s in all_states if "grasps" in s][:20],
+                    )
+                )
+            goal_state = goal_candidates[0]
+
+            start_state = self._factory_state_from_config(q_init)
+            if not start_state:
+                raise RuntimeError("Could not determine start state")
+
+            # Ensure we start exactly in the detected start state.
+            cg.project_on_node(start_state, q_init, "q_init")
+
+            edge_path = self._bfs_edge_path(
+                start_state,
+                goal_state,
+                self.graph_builder.get_edge_topology(),
             )
-            return {"q_init": q_init, "q_goal": q_goal_modified}
+            if not edge_path:
+                topo = self.graph_builder.get_edge_topology()
+                raise RuntimeError(
+                    "No path found in factory graph from '%s' to '%s'. "
+                    "(extracted %d transition endpoints)"
+                    % (start_state, goal_state, len(topo))
+                )
+
+            q_current = cg.configs["q_init"]
+            for i, edge_name in enumerate(edge_path):
+                safe_edge = edge_name.replace(" ", "_").replace("/", "_")
+                label = f"q_wp_{i}_{safe_edge}"
+                ok, q_next = cg.generate_via_edge(edge_name, q_current, label)
+                if not ok or q_next is None:
+                    raise RuntimeError(
+                        "Failed generating config via edge '%s'" % edge_name
+                    )
+                q_current = q_next
+
+            cg.configs["q_goal"] = q_current
+            print(f"    ✓ Goal state: {goal_state}")
+            return cg.configs
 
         # 1. Project initial onto placement
         print("    1. Projecting onto 'placement' state...")
@@ -258,15 +504,9 @@ class GraspFrameGripperTask(ManipulationTask):
         # 7. Project onto tool-in-air
         print("    7. Projecting onto 'tool-in-air' state...")
         cg.project_on_node("tool-in-air", cg.configs["q_lifted"], "q_tool_air")
-        
-        # 8. Generate goal (move tool 20cm in x)
-        print("    8. Generating goal configuration...")
-        q_goal_modified = cg.modify_object_pose(
-            cg.configs["q_init"],
-            object_index=0,  # frame_gripper is first object
-            translation_delta=[0.2, 0.0, 0.0]
-        )
-        cg.project_on_node("placement", q_goal_modified, "q_goal")
+
+        # 8. Goal: hold the tool (after lift)
+        cg.configs["q_goal"] = cg.configs["q_tool_air"]
         return cg.configs
 
 
@@ -316,7 +556,14 @@ def main(
         viewer = result['viewer']
         
         # Collect all handle names
-        handle_names = task.graph_builder.factory.handles
+        if task.use_factory and getattr(task.graph_builder, "factory", None):
+            handle_names = task.graph_builder.factory.handles
+        else:
+            handle_names = [
+                handle
+                for handles in GraspFrameGripperConfig.HANDLES_PER_OBJECT
+                for handle in handles
+            ]
         
         # Visualize handles with approach arrows
         visualize_all_handles(
