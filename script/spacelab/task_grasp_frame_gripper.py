@@ -440,11 +440,32 @@ class GraspFrameGripperTask(ManipulationTask):
             )
             if not edge_path:
                 topo = self.graph_builder.get_edge_topology()
-                raise RuntimeError(
-                    "No path found in factory graph from '%s' to '%s'. "
-                    "(extracted %d transition endpoints)"
+                print(
+                    "    ! No edge path found from '%s' to '%s' "
+                    "(extracted %d transition endpoints). "
+                    "Falling back to direct projection into goal state."
                     % (start_state, goal_state, len(topo))
                 )
+
+                q_current = cg.configs["q_init"]
+                try:
+                    cg.project_on_node(goal_state, q_current, "q_goal")
+                except Exception as exc:
+                    raise RuntimeError(
+                        "No path found in factory graph from '%s' to '%s', "
+                        "and direct projection into '%s' failed: %s "
+                        "(extracted %d transition endpoints)"
+                        % (
+                            start_state,
+                            goal_state,
+                            goal_state,
+                            exc,
+                            len(topo),
+                        )
+                    )
+
+                print(f"    ✓ Goal state (projected): {goal_state}")
+                return cg.configs
 
             q_current = cg.configs["q_init"]
             for i, edge_name in enumerate(edge_path):
