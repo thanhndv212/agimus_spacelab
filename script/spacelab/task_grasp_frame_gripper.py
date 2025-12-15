@@ -22,6 +22,7 @@ from typing import List, Dict
 
 from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
+from agimus_spacelab.config.base_config import BaseTaskConfig
 from agimus_spacelab.visualization import (
     print_joint_info,
     visualize_constraint_graph,
@@ -33,7 +34,7 @@ from agimus_spacelab.visualization import (
 config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
 
-from spacelab_config import TaskConfigurations
+from spacelab_config import TaskConfigurations  # noqa: E402
 
 
 # ============================================================================
@@ -42,6 +43,20 @@ from spacelab_config import TaskConfigurations
 GraspFrameGripperConfig = TaskConfigurations.GraspFrameGripper
 # Initialize poses
 GraspFrameGripperConfig.init_poses()
+
+
+class _FactoryGraphTaskSpec(BaseTaskConfig):
+    """Adapter to use GraphBuilder.build_graph_for_task in factory mode."""
+
+    ROBOT_NAMES = GraspFrameGripperConfig.ROBOT_NAMES
+    ENVIRONMENT_NAMES = GraspFrameGripperConfig.ENVIRONMENT_NAMES
+    OBJECTS = GraspFrameGripperConfig.OBJECTS
+
+    GRIPPERS = GraspFrameGripperConfig.GRIPPERS
+    HANDLES_PER_OBJECT = GraspFrameGripperConfig.HANDLES_PER_OBJECT
+    CONTACT_SURFACES_PER_OBJECT = [[] for _ in OBJECTS]
+    ENVIRONMENT_CONTACTS = ["ground_demo/tools_dispenser_surface"]
+    VALID_PAIRS = GraspFrameGripperConfig.VALID_PAIRS
 
 
 # ============================================================================
@@ -157,23 +172,21 @@ class GraspFrameGripperTask(ManipulationTask):
     def create_graph(self):
         """Create and configure constraint graph."""
         if self.use_factory:
-        # """Create graph using ConstraintGraphFactory (automatic)."""
-            cfg = self.config
-            
-            # Initialize GraphBuilder
+            # Backend-specific objects
+            if self.backend == "pyhpp":
+                robot = self.planner.get_robot()
+                problem = self.planner.get_problem()
+            else:
+                robot = self.robot
+                problem = self.ps
+
+            # Initialize GraphBuilder and build graph from task spec
             self.graph_builder = GraphBuilder(
-                self.planner, self.robot, self.ps, backend=self.backend
+                self.planner, robot, problem, backend=self.backend
             )
-            
-            # Create factory graph
-            graph = self.graph_builder.create_factory_graph(
-                grippers=cfg.GRIPPERS,
-                objects=cfg.OBJECTS,
-                handles_per_object=cfg.HANDLES_PER_OBJECT,
-                environment_contacts=["ground_demo/tools_dispenser_surface"],
-                valid_pairs=cfg.VALID_PAIRS
+            return self.graph_builder.build_graph_for_task(
+                _FactoryGraphTaskSpec, mode="factory"
             )
-            return graph
 
         else:
             if self.backend == "corba":
@@ -181,17 +194,15 @@ class GraspFrameGripperTask(ManipulationTask):
             if self.backend == "pyhpp":
                 return self._create_pyhpp_graph_manual()
 
-            
     def generate_configurations(
         self, q_init: List[float]
     ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
         # Factory mode creates different node/edge names
-        # For now, just return initial config for factory mode        
+        # For now, just return initial config for factory mode
         cg = self.config_gen
         cfg = self.config
 
-                    
         # Update max attempts
         cg.max_attempts = cfg.MAX_RANDOM_ATTEMPTS
         
@@ -202,9 +213,8 @@ class GraspFrameGripperTask(ManipulationTask):
                 object_index=0,  # frame_gripper is first object
                 translation_delta=[0.2, 0.0, 0.0]
             )
-            return {"q_init": q_init,
-                    "q_goal": q_goal_modified}
-                
+            return {"q_init": q_init, "q_goal": q_goal_modified}
+
         # 1. Project initial onto placement
         print("    1. Projecting onto 'placement' state...")
         cg.project_on_node("placement", q_init, "q_init")
@@ -281,7 +291,7 @@ def main(
         use_factory: Use ConstraintGraphFactory (automatic) instead of
             manual graph
         backend: "corba" or "pyhpp" - which backend to use
-    """ 
+    """
     print(f"Using backend: {backend.upper()}")
     
     # Create and setup task
@@ -342,14 +352,13 @@ def main(
         print("\nTo replay path:")
         print("  task.planner.play_path(0)")
 
-
     # Visualize constraint graph
     print("\n📊 Generating constraint graph visualization...")
     # Pass state/edge dicts for PyHPP backend
     states_dict = getattr(task, 'pyhpp_states', None)
     edges_dict = getattr(task, 'pyhpp_edges', None)
     edge_topology = getattr(task, 'pyhpp_edge_topology', None)
-    viz_path = visualize_constraint_graph(
+    visualize_constraint_graph(
         task.graph_builder,
         output_path="constraint_graph",
         states_dict=states_dict,
