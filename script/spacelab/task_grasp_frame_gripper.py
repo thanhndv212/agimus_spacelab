@@ -368,6 +368,41 @@ class GraspFrameGripperTask(ManipulationTask):
         states = list(getattr(self.graph_builder, "states", {}).keys())
         return states[0] if states else ""
 
+    def _freeze_vispa_joints(self, q: List[float], q_ref: List[float]) -> List[float]:
+        """Keep VISPA and VISPA2 joint values constant.
+
+        This task only moves UR10 and the grasped object. Projections and random
+        shooting can otherwise drift VISPA/VISPA2 joints.
+        """
+        if self.backend != "corba":
+            return q
+
+        robot = self.robot
+        if robot is None:
+            return q
+
+        q_out = list(q)
+        try:
+            joint_names = robot.getJointNames()
+        except Exception:
+            return q_out
+
+        for joint in joint_names:
+            if "vispa" not in joint:
+                continue
+            try:
+                rank = robot.rankInConfiguration[joint]
+                size = robot.getJointConfigSize(joint)
+            except Exception:
+                continue
+            if size <= 0:
+                continue
+            if rank + size > len(q_out) or rank + size > len(q_ref):
+                continue
+            q_out[rank : rank + size] = q_ref[rank : rank + size]
+
+        return q_out
+
     @staticmethod
     def _bfs_edge_path(
         start_state: str,
@@ -415,6 +450,8 @@ class GraspFrameGripperTask(ManipulationTask):
         cg = self.config_gen
         cfg = self.config
 
+        q_ref = list(q_init)
+
         # Update max attempts
         cg.max_attempts = cfg.MAX_RANDOM_ATTEMPTS
         
@@ -446,6 +483,9 @@ class GraspFrameGripperTask(ManipulationTask):
 
             # Ensure we start exactly in the detected start state.
             cg.project_on_node(start_state, q_init, "q_init")
+            cg.configs["q_init"] = self._freeze_vispa_joints(
+                cg.configs["q_init"], q_ref
+            )
 
             edge_path = self._bfs_edge_path(
                 start_state,
@@ -464,6 +504,9 @@ class GraspFrameGripperTask(ManipulationTask):
                 q_current = cg.configs["q_init"]
                 try:
                     cg.project_on_node(goal_state, q_current, "q_goal")
+                    cg.configs["q_goal"] = self._freeze_vispa_joints(
+                        cg.configs["q_goal"], q_ref
+                    )
                 except Exception as exc:
                     raise RuntimeError(
                         "No path found in factory graph from '%s' to '%s', "
@@ -490,15 +533,18 @@ class GraspFrameGripperTask(ManipulationTask):
                     raise RuntimeError(
                         "Failed generating config via edge '%s'" % edge_name
                     )
-                q_current = q_next
+                q_next_frozen = self._freeze_vispa_joints(q_next, q_ref)
+                cg.configs[label] = q_next_frozen
+                q_current = q_next_frozen
 
-            cg.configs["q_goal"] = q_current
+            cg.configs["q_goal"] = self._freeze_vispa_joints(q_current, q_ref)
             print(f"    ✓ Goal state: {goal_state}")
             return cg.configs
 
         # 1. Project initial onto placement
         print("    1. Projecting onto 'placement' state...")
         cg.project_on_node("placement", q_init, "q_init")
+        cg.configs["q_init"] = self._freeze_vispa_joints(cg.configs["q_init"], q_ref)
         
         # 2. Generate approach config
         print("    2. Generating 'approach-tool' config...")
@@ -507,12 +553,16 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
+        cg.configs["q_approach"] = self._freeze_vispa_joints(
+            cg.configs["q_approach"], q_ref
+        )
             
         # 3. Project onto gripper-above-tool
         print("    3. Projecting onto 'gripper-above-tool' state...")
         cg.project_on_node(
             "gripper-above-tool", cg.configs["q_approach"], "q_above"
         )
+        cg.configs["q_above"] = self._freeze_vispa_joints(cg.configs["q_above"], q_ref)
         
         # 4. Generate grasp config
         print("    4. Generating 'grasp-tool' config...")
@@ -521,11 +571,15 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
+        cg.configs["q_grasp"] = self._freeze_vispa_joints(cg.configs["q_grasp"], q_ref)
             
         # 5. Project onto grasp-placement
         print("    5. Projecting onto 'grasp-placement' state...")
         cg.project_on_node(
             "grasp-placement", cg.configs["q_grasp"], "q_grasp_place"
+        )
+        cg.configs["q_grasp_place"] = self._freeze_vispa_joints(
+            cg.configs["q_grasp_place"], q_ref
         )
         
         # 6. Generate lift config
@@ -535,13 +589,19 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
+        cg.configs["q_lifted"] = self._freeze_vispa_joints(cg.configs["q_lifted"], q_ref)
             
         # 7. Project onto tool-in-air
         print("    7. Projecting onto 'tool-in-air' state...")
         cg.project_on_node("tool-in-air", cg.configs["q_lifted"], "q_tool_air")
+        cg.configs["q_tool_air"] = self._freeze_vispa_joints(
+            cg.configs["q_tool_air"], q_ref
+        )
 
-        # 8. Goal: hold the tool (after lift)
-        cg.configs["q_goal"] = cg.configs["q_tool_air"]
+        # 8. Goal: use the lifted configuration as goal
+        cg.configs["q_goal"] = self._freeze_vispa_joints(
+            cg.configs["q_tool_air"], q_ref
+        )
         return cg.configs
 
 
