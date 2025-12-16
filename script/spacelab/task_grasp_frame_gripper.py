@@ -315,7 +315,10 @@ class GraspFrameGripperTask(ManipulationTask):
         print("    ✓ Added constraints to edges")
 
         # Set constant RHS
+        self.ps.setConstantRightHandSide("grasp", True)
         self.ps.setConstantRightHandSide("placement", True)
+        self.ps.setConstantRightHandSide("gripper_tool_aligned", True)
+        self.ps.setConstantRightHandSide("tool_in_air", True)
         self.ps.setConstantRightHandSide("placement/complement", False)
         self.ps.setConstantRightHandSide("tool_in_air/complement", False)
         print("    ✓ Set constant right-hand side")
