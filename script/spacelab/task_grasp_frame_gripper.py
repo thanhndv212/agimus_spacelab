@@ -644,7 +644,15 @@ def main(
         print_joint_info(task.robot)
         
     # Run task
-    result = task.run(visualize=visualize, solve=solve)
+    preferred_configs = [
+                    "q_above",
+                    "q_grasp",
+                    "q_grasp_place",
+                    "q_lifted",
+                    "q_tool_air",
+                ]
+    result = task.run(visualize=visualize, solve=solve,
+                      preferred_configs=preferred_configs)
     
     # Visualize handles and grippers if viewer available
     if visualize and result.get('viewer'):
