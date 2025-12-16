@@ -45,6 +45,114 @@ class TaskConfigurations:
             "gripper-above-tool",
             "placement",
         ]
+
+        # ====================================================================
+        # Graph Definition (Declarative)
+        # ====================================================================
+
+        GRASP_FG_GRAPH = {
+            "name": "grasp_fg_graph",
+
+            # States with their constraints
+            "states": {
+                "placement": {"constraints": ["placement"]},
+                "gripper-above-tool": {
+                    "constraints": ["placement", "gripper_tool_aligned"]
+                },
+                "grasp-placement": {"constraints": ["grasp", "placement"]},
+                "tool-in-air": {"constraints": ["grasp", "tool_in_air"]},
+                "grasp": {"constraints": ["grasp"]},
+            },
+
+            # Edges: from -> to via containing state
+            "edges": {
+                # Self-loops
+                "transit": {
+                    "from": "placement", "to": "placement", "in": "placement"
+                },
+                "transfer": {"from": "grasp", "to": "grasp", "in": "grasp"},
+
+                # From placement
+                "approach-tool": {
+                    "from": "placement",
+                    "to": "gripper-above-tool",
+                    "in": "placement",
+                },
+
+                # From gripper-above-tool
+                "move-gripper-away": {
+                    "from": "gripper-above-tool",
+                    "to": "placement",
+                    "in": "placement",
+                },
+                "grasp-tool": {
+                    "from": "gripper-above-tool",
+                    "to": "grasp-placement",
+                    "in": "placement",
+                },
+
+                # From grasp-placement
+                "release-tool": {
+                    "from": "grasp-placement",
+                    "to": "gripper-above-tool",
+                    "in": "placement",
+                },
+                "lift-tool": {
+                    "from": "grasp-placement",
+                    "to": "tool-in-air",
+                    "in": "grasp",
+                },
+
+                # From tool-in-air
+                "lower-tool": {
+                    "from": "tool-in-air",
+                    "to": "grasp-placement",
+                    "in": "grasp",
+                },
+                "move-tool-away": {
+                    "from": "tool-in-air",
+                    "to": "grasp",
+                    "in": "grasp",
+                },
+
+                # From grasp
+                "approach-dispenser": {
+                    "from": "grasp",
+                    "to": "tool-in-air",
+                    "in": "grasp",
+                },
+            },
+
+            # Edge path constraints (grouped by constraint)
+            # Edges not listed are free motion (no path constraints)
+            "edge_constraints": {
+                "placement/complement": [
+                    "transit",
+                    "approach-tool",
+                    "move-gripper-away",
+                    "grasp-tool",
+                    "release-tool",
+                ],
+                "tool_in_air/complement": ["lift-tool", "lower-tool"],
+            },
+
+            # Free motion edges (no path constraints)
+            "free_motion_edges": [
+                "transfer",
+                "move-tool-away",
+                "approach-dispenser",
+            ],
+
+            # Constant RHS settings (CORBA only)
+            "constant_rhs": {
+                "grasp": True,
+                "placement": True,
+                "gripper_tool_aligned": True,
+                "tool_in_air": True,
+                "placement/complement": False,
+                "tool_in_air/complement": False,
+            },
+        }
         
         # Collision parameters
         TOOL_CONTACT_JOINT = "frame_gripper/root_joint"

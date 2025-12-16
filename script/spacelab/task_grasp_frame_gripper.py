@@ -134,57 +134,65 @@ class GraspFrameGripperTask(ManipulationTask):
         if self.use_factory:
             print("    (Factory mode: constraints created automatically)")
             return
+        
+        else:
+            print("    Creating constraints manually")
+            # Get robot reference (differs by backend)
+            robot = (
+                self.planner.get_robot()
+                if self.backend == "pyhpp"
+                else self.robot
+            )
+            cb = ConstraintBuilder
+            cfg = self.config
             
-        cb = ConstraintBuilder
-        cfg = self.config
-        
-        # 1. Grasp: gripper holds tool
-        cb.create_grasp_constraint(
-            self.ps, "grasp",
-            cfg.GRIPPER_NAME, cfg.TOOL_NAME,
-            cfg.TOOL_IN_GRIPPER, cfg.GRASP_MASK,
-            robot=self.robot, backend=self.backend
-        )
-        
-        # 2. Placement: tool on dispenser (Z and rotations fixed)
-        cb.create_placement_constraint(
-            self.ps, "placement",
-            cfg.TOOL_NAME, cfg.TOOL_ON_DISPENSER,
-            cfg.PLACEMENT_MASK,
-            robot=self.robot, backend=self.backend
-        )
-        
-        # 3. Placement complement: X, Y free (sliding on surface)
-        cb.create_complement_constraint(
-            self.ps, "placement",
-            cfg.TOOL_NAME, cfg.TOOL_ON_DISPENSER,
-            cfg.PLACEMENT_COMPLEMENT_MASK,
-            robot=self.robot, backend=self.backend
-        )
-        
-        # 4. Gripper-tool aligned: gripper above tool
-        cb.create_grasp_constraint(
-            self.ps, "gripper_tool_aligned",
-            cfg.GRIPPER_NAME, cfg.TOOL_NAME,
-            cfg.GRIPPER_ABOVE_TOOL, cfg.GRASP_MASK,
-            robot=self.robot, backend=self.backend
-        )
-        
-        # 5. Tool in air: lifted position
-        cb.create_placement_constraint(
-            self.ps, "tool_in_air",
-            cfg.TOOL_NAME, cfg.TOOL_IN_AIR,
-            cfg.PLACEMENT_MASK,
-            robot=self.robot, backend=self.backend
-        )
-        
-        # 6. Tool in air complement
-        cb.create_complement_constraint(
-            self.ps, "tool_in_air",
-            cfg.TOOL_NAME, cfg.TOOL_IN_AIR,
-            cfg.PLACEMENT_COMPLEMENT_MASK,
-            robot=self.robot, backend=self.backend
-        )
+            # 1. Grasp: gripper holds tool
+            cb.create_grasp_constraint(
+                self.ps, "grasp",
+                cfg.GRIPPER_NAME, cfg.TOOL_NAME,
+                cfg.TOOL_IN_GRIPPER, cfg.GRASP_MASK,
+                robot=robot, backend=self.backend
+            )
+            
+            # 2. Placement: tool on dispenser (Z and rotations fixed)
+            cb.create_placement_constraint(
+                self.ps, "placement",
+                cfg.TOOL_NAME, cfg.TOOL_ON_DISPENSER,
+                cfg.PLACEMENT_MASK,
+                robot=robot, backend=self.backend
+            )
+            
+            # 3. Placement complement: X, Y free (sliding on surface)
+            cb.create_complement_constraint(
+                self.ps, "placement",
+                cfg.TOOL_NAME, cfg.TOOL_ON_DISPENSER,
+                cfg.PLACEMENT_COMPLEMENT_MASK,
+                robot=robot, backend=self.backend
+            )
+            
+            # 4. Gripper-tool aligned: gripper above tool
+            cb.create_grasp_constraint(
+                self.ps, "gripper_tool_aligned",
+                cfg.GRIPPER_NAME, cfg.TOOL_NAME,
+                cfg.GRIPPER_ABOVE_TOOL, cfg.GRASP_MASK,
+                robot=robot, backend=self.backend
+            )
+            
+            # 5. Tool in air: lifted position
+            cb.create_placement_constraint(
+                self.ps, "tool_in_air",
+                cfg.TOOL_NAME, cfg.TOOL_IN_AIR,
+                cfg.PLACEMENT_MASK,
+                robot=robot, backend=self.backend
+            )
+            
+            # 6. Tool in air complement
+            cb.create_complement_constraint(
+                self.ps, "tool_in_air",
+                cfg.TOOL_NAME, cfg.TOOL_IN_AIR,
+                cfg.PLACEMENT_COMPLEMENT_MASK,
+                robot=robot, backend=self.backend
+            )
         
     def create_graph(self):
         """Create and configure constraint graph."""
@@ -196,7 +204,7 @@ class GraspFrameGripperTask(ManipulationTask):
             robot = self.robot
             problem = self.ps
 
-        # Always keep a GraphBuilder instance for visualization/introspection.
+        # Initialize GraphBuilder
         self.graph_builder = GraphBuilder(
             self.planner, robot, problem, backend=self.backend
         )
@@ -205,14 +213,14 @@ class GraspFrameGripperTask(ManipulationTask):
             return self.graph_builder.build_graph_for_task(
                 _FactoryGraphTaskSpec, mode="factory"
             )
-
-        if self.backend == "corba":
-            return self._create_corba_graph_manual()
-        if self.backend == "pyhpp":
-            raise NotImplementedError(
-                "Manual graph mode is not implemented for PyHPP in this "
-                "script. Use --factory with --backend pyhpp."
-            )
+        else:
+            if self.backend == "corba":
+                return self._create_corba_graph_manual()
+            if self.backend == "pyhpp":
+                raise NotImplementedError(
+                    "Manual graph mode is not implemented for PyHPP in this "
+                    "script. Use --factory with --backend pyhpp."
+                )
 
         raise ValueError(f"Unsupported backend: {self.backend}")
 
@@ -222,105 +230,56 @@ class GraspFrameGripperTask(ManipulationTask):
 
         gb = self.graph_builder
         cfg = self.config
+        graph_def = getattr(cfg, "GRASP_FG_GRAPH", None)
+        if not isinstance(graph_def, dict):
+            raise RuntimeError("Missing 'GRASP_FG_GRAPH' graph config")
         gb.create_manual_graph(name="graph")
 
-        # Create nodes
-        gb.add_states(cfg.GRAPH_NODES)
-        print(f"    ✓ Created {len(cfg.GRAPH_NODES)} states")
-
-        # Create edges (transitions)
-        gb.add_edge("placement", "placement", "transit", 1, "placement")
-        gb.add_edge("grasp", "grasp", "transfer", 1, "grasp")
-
-        gb.add_edge(
-            "placement", "gripper-above-tool", "approach-tool", 1, "placement"
+        # Create states (order matters for solver performance)
+        state_names = getattr(cfg, "GRAPH_NODES", None) or list(
+            graph_def.get("states", {}).keys()
         )
-        gb.add_edge(
-            "gripper-above-tool",
-            "placement",
-            "move-gripper-away",
-            1,
-            "placement",
-        )
-        gb.add_edge(
-            "gripper-above-tool",
-            "grasp-placement",
-            "grasp-tool",
-            1,
-            "placement",
-        )
+        gb.add_states(state_names)
+        print(f"    ✓ Created {len(state_names)} states")
 
-        gb.add_edge(
-            "grasp-placement",
-            "gripper-above-tool",
-            "release-tool",
-            1,
-            "placement",
-        )
-        gb.add_edge("grasp-placement", "tool-in-air", "lift-tool", 1, "grasp")
-
-        gb.add_edge("tool-in-air", "grasp-placement", "lower-tool", 1, "grasp")
-        gb.add_edge("tool-in-air", "grasp", "move-tool-away", 1, "grasp")
-
-        gb.add_edge("grasp", "tool-in-air", "approach-dispenser", 1, "grasp")
+        # Create edges from declarative definition
+        for edge_name, edge_info in graph_def.get("edges", {}).items():
+            gb.add_edge(
+                edge_info["from"],
+                edge_info["to"],
+                edge_name,
+                edge_info.get("weight", 1),
+                edge_info["in"],
+            )
         print("    ✓ Created edges (transitions)")
 
-        # Assign node constraints
-        gb.add_state_constraints(
-            "placement", constraints=[], constraint_names=["placement"]
-        )
-        gb.add_state_constraints(
-            "gripper-above-tool",
-            constraints=[],
-            constraint_names=["placement", "gripper_tool_aligned"],
-        )
-        gb.add_state_constraints(
-            "grasp-placement",
-            constraints=[],
-            constraint_names=["grasp", "placement"],
-        )
-        gb.add_state_constraints(
-            "tool-in-air",
-            constraints=[],
-            constraint_names=["grasp", "tool_in_air"],
-        )
-        gb.add_state_constraints(
-            "grasp", constraints=[], constraint_names=["grasp"]
-        )
+        # Add constraints to states from declarative definition
+        for state_name, state_info in graph_def.get("states", {}).items():
+            constraint_names = state_info.get("constraints", [])
+            if constraint_names:
+                gb.add_state_constraints(
+                    state_name, [], constraint_names=constraint_names
+                )
         print("    ✓ Added constraints to nodes")
 
-        # Assign edge (path) constraints
-        for edge in [
-            "transit",
-            "approach-tool",
-            "move-gripper-away",
-            "grasp-tool",
-            "release-tool",
-        ]:
-            gb.add_edge_constraints(
-                edge,
-                constraints=[],
-                constraint_names=["placement/complement"],
-            )
+        # Add constraints to edges from declarative definition
+        edge_constraints_def = graph_def.get("edge_constraints", {})
+        for constraint_name, edge_list in edge_constraints_def.items():
+            for edge_name in edge_list:
+                gb.add_edge_constraints(
+                    edge_name, [], constraint_names=[constraint_name]
+                )
 
-        for edge in ["lift-tool", "lower-tool"]:
-            gb.add_edge_constraints(
-                edge,
-                constraints=[],
-                constraint_names=["tool_in_air/complement"],
-            )
-
-        for edge in ["transfer", "move-tool-away", "approach-dispenser"]:
-            gb.add_edge_constraints(edge, constraints=[], constraint_names=[])
+        # Free motion edges (no path constraints)
+        for edge_name in graph_def.get("free_motion_edges", []):
+            gb.add_edge_constraints(edge_name, [], constraint_names=[])
         print("    ✓ Added constraints to edges")
 
-        # Set constant RHS
-        self.ps.setConstantRightHandSide("grasp", True)
-        self.ps.setConstantRightHandSide("placement", True)
-        self.ps.setConstantRightHandSide("gripper_tool_aligned", True)
-        self.ps.setConstantRightHandSide("tool_in_air", True)
-        self.ps.setConstantRightHandSide("placement/complement", False)
-        self.ps.setConstantRightHandSide("tool_in_air/complement", False)
+        # Set constant RHS (CORBA only)
+        for constraint_name, is_constant in graph_def.get(
+            "constant_rhs", {}
+        ).items():
+            self.ps.setConstantRightHandSide(constraint_name, is_constant)
         print("    ✓ Set constant right-hand side")
 
         # Set security margins BEFORE initialize
