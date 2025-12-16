@@ -217,18 +217,11 @@ class GraspFrameGripperTask(ManipulationTask):
                 _FactoryGraphTaskSpec, mode="factory"
             )
         else:
-            if self.backend == "corba":
-                return self._create_corba_graph_manual()
-            if self.backend == "pyhpp":
-                raise NotImplementedError(
-                    "Manual graph mode is not implemented for PyHPP in this "
-                    "script. Use --factory with --backend pyhpp."
-                )
+            return self._create_manual_graph()
 
-        raise ValueError(f"Unsupported backend: {self.backend}")
 
-    def _create_corba_graph_manual(self):
-        """Create the manual CORBA graph using GraphBuilder helpers."""
+    def _create_manual_graph(self):
+        """Create the manual graph using GraphBuilder (both backends)."""
         print("    Building graph manually")
 
         gb = self.graph_builder
@@ -236,13 +229,25 @@ class GraspFrameGripperTask(ManipulationTask):
         graph_def = getattr(cfg, "GRASP_FG_GRAPH", None)
         if not isinstance(graph_def, dict):
             raise RuntimeError("Missing 'GRASP_FG_GRAPH' graph config")
-        gb.create_manual_graph(name="graph")
+
+        # PyHPP constraint objects (CORBA uses names)
+        constraints = self.pyhpp_constraints if self.backend == "pyhpp" else None
+
+        # Create empty graph
+        graph_name = (
+            "manipulation_graph" if self.backend == "pyhpp" else "graph"
+        )
+        gb.create_manual_graph(name=graph_name)
 
         # Create states (order matters for solver performance)
         state_names = getattr(cfg, "GRAPH_NODES", None) or list(
             graph_def.get("states", {}).keys()
         )
-        gb.add_states(state_names)
+        if self.backend == "corba":
+            gb.add_states(state_names)
+        else:
+            for state_name in state_names:
+                gb.add_state(state_name)
         print(f"    ✓ Created {len(state_names)} states")
 
         # Create edges from declarative definition
@@ -257,51 +262,65 @@ class GraspFrameGripperTask(ManipulationTask):
         print("    ✓ Created edges (transitions)")
 
         # Add constraints to states from declarative definition
-        for state_name, state_info in graph_def.get("states", {}).items():
+        states_def = graph_def.get("states", {})
+        for state_name, state_info in states_def.items():
             constraint_names = state_info.get("constraints", [])
             if constraint_names:
-                gb.add_state_constraints(
-                    state_name, [], constraint_names=constraint_names
-                )
+                if self.backend == "corba":
+                    gb.add_state_constraints(
+                        state_name, [], constraint_names=constraint_names
+                    )
+                else:
+                    constraint_objs = [constraints[n] for n in constraint_names]
+                    gb.add_state_constraints(state_name, constraint_objs)
         print("    ✓ Added constraints to nodes")
 
         # Add constraints to edges from declarative definition
         edge_constraints_def = graph_def.get("edge_constraints", {})
         for constraint_name, edge_list in edge_constraints_def.items():
             for edge_name in edge_list:
-                gb.add_edge_constraints(
-                    edge_name, [], constraint_names=[constraint_name]
-                )
+                if self.backend == "corba":
+                    gb.add_edge_constraints(
+                        edge_name, [], constraint_names=[constraint_name]
+                    )
+                else:
+                    gb.add_edge_constraints(
+                        edge_name, [constraints[constraint_name]]
+                    )
 
         # Free motion edges (no path constraints)
         for edge_name in graph_def.get("free_motion_edges", []):
-            gb.add_edge_constraints(edge_name, [], constraint_names=[])
+            if self.backend == "corba":
+                gb.add_edge_constraints(edge_name, [], constraint_names=[])
+            else:
+                gb.add_edge_constraints(edge_name, [])
         print("    ✓ Added constraints to edges")
 
         # Set constant RHS (CORBA only)
-        for constraint_name, is_constant in graph_def.get(
-            "constant_rhs", {}
-        ).items():
-            self.ps.setConstantRightHandSide(constraint_name, is_constant)
-        print("    ✓ Set constant right-hand side")
+        if self.backend == "corba":
+            for constraint_name, is_constant in graph_def.get(
+                "constant_rhs", {}
+            ).items():
+                self.ps.setConstantRightHandSide(constraint_name, is_constant)
+            print("    ✓ Set constant right-hand side")
 
-        # Set security margins BEFORE initialize
-        for edge_name in cfg.PLACEMENT_EDGES:
-            gb.graph.setSecurityMarginForEdge(
-                edge_name,
-                cfg.TOOL_CONTACT_JOINT,
-                cfg.DISPENSER_CONTACT_JOINT,
-                cfg.CONTACT_MARGIN,
+            # Set security margins BEFORE initialize (CORBA only)
+            for edge_name in cfg.PLACEMENT_EDGES:
+                gb.graph.setSecurityMarginForEdge(
+                    edge_name,
+                    cfg.TOOL_CONTACT_JOINT,
+                    cfg.DISPENSER_CONTACT_JOINT,
+                    cfg.CONTACT_MARGIN,
+                )
+            print(
+                f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
+                "for placement edges"
             )
-        print(
-            f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
-            "for placement edges"
-        )
 
         # Initialize graph
         gb.finalize_manual_graph()
         print("    ✓ Graph initialized")
-        return gb.graph
+        return gb.get_graph()
 
     def _factory_state_from_config(self, q: List[float]) -> str:
         """Best-effort detection of the current factory state name."""
