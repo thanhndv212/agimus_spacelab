@@ -27,15 +27,15 @@ class TaskConfigurations:
         ROBOTS = ["UR10", "VISPA_BASE", "VISPA_ARM"]
 
         # Transform configurations (in xyzquat format)
-        TOOL_IN_GRIPPER = [0.0, 0.0, 0.1,
-                           0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
-        GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.2,
-                              0.0, -0.7071067811865476, 0.0, 0.7071067811865476]
+        TOOL_IN_GRIPPER = [0.0, 0.0, 0.0,
+                           0.0, 0.0, 0.0, 1.0]
+        GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.03,
+                              0.0, 0.0, 0.0, 1.0]
         
         # Constraint masks (6 DOF: [x, y, z, rx, ry, rz])
         GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
-        PLACEMENT_MASK = [False, False, True, True, True, True]  # Z + rotations fixed
-        PLACEMENT_COMPLEMENT_MASK = [True, True, False, False, False, False]  # X, Y free
+        PLACEMENT_MASK = [True, False, True, True, True, True]  # Z + rotations fixed
+        PLACEMENT_COMPLEMENT_MASK = [False, True, False, False, False, False]  # X, Y free
         
         # Graph structure
         GRAPH_NODES = [
@@ -65,8 +65,8 @@ class TaskConfigurations:
 
 
         # Gripper and object names
-        GRIPPER_NAME = "spacelab/ur10_joint_6_7"
-        TOOL_NAME = "frame_gripper/root_joint"
+        GRIPPER_NAME = "spacelab/g_ur10_tool"
+        TOOL_NAME = "frame_gripper/h_FG_tool"
         
         # Grippers (for factory mode)
         GRIPPERS = ["spacelab/g_ur10_tool"]
@@ -101,7 +101,7 @@ class TaskConfigurations:
             
             # Lifted position
             cls.TOOL_IN_AIR = tool_pose_quat.copy()
-            cls.TOOL_IN_AIR[2] += cls.LIFT_HEIGHT  # Use inherited constant
+            cls.TOOL_IN_AIR[1] -= cls.LIFT_HEIGHT  # Use inherited constant
             cls.TOOL_IN_AIR = cls.TOOL_IN_AIR.tolist()
 
 
