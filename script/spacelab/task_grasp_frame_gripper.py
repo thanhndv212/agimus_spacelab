@@ -603,7 +603,7 @@ def main(
         # Visualize handles with approach arrows
         visualize_all_handles(
             viewer, handle_names,
-            show_approach=True,
+            show_approach=False,
             frame_color=[0, 0.8, 0, 1],   # Green
             arrow_color=[0, 1, 1, 1],      # Cyan
             axis_length=0.05,
@@ -614,7 +614,7 @@ def main(
         gripper_names = GraspFrameGripperConfig.GRIPPERS
         visualize_all_grippers(
             viewer, gripper_names,
-            show_approach=True,
+            show_approach=False,
             frame_color=[1, 0, 0, 1],      # Red
             arrow_color=[1, 0.5, 0, 1],    # Orange
             axis_length=0.05,
