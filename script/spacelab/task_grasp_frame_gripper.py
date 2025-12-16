@@ -68,6 +68,9 @@ class _FactoryGraphTaskSpec(BaseTaskConfig):
 
 class GraspFrameGripperTask(ManipulationTask):
     """UR10 grasps frame_gripper from dispenser."""
+
+    # VISPA arms are not used in this task; keep them fixed during planning.
+    FREEZE_JOINT_SUBSTRINGS = ["vispa"]
     
     def __init__(self, use_factory: bool = False, backend: str = "corba"):
         """
