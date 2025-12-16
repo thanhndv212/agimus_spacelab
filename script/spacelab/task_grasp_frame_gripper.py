@@ -113,6 +113,20 @@ class GraspFrameGripperTask(ManipulationTask):
             remove_collision=True,
             remove_distance=False
         )
+
+        # In this scenario, the SRDF gripper/handle frames are on fixed/fake
+        # links (children of the EE link / object link). Disable collisions
+        # between the whole EE subtree and the object subtree so factory grasp
+        # planning doesn't fail on link-level collisions.
+        if self.backend == "corba":
+            self.scene_builder.disable_collisions_between_subtrees(
+                "spacelab/ur10_link_7",
+                self.config.TOOL_CONTACT_JOINT,
+                remove_collision=True,
+                remove_distance=False,
+                verbose=True,
+                max_pairs=200,
+            )
     
     def create_constraints(self) -> None:
         """Create all transformation constraints."""
