@@ -176,6 +176,9 @@ class TaskConfigurations:
         GRIPPER_NAME = "spacelab/g_ur10_tool"
         TOOL_NAME = "frame_gripper/h_FG_tool"
         
+        GRIPPER_JOINT = "spacelab/ur10_joint_6_7"
+        TOOL_JOINT = "frame_gripper/root_joint"
+
         # Grippers (for factory mode)
         GRIPPERS = ["spacelab/g_ur10_tool"]
         
@@ -211,6 +214,52 @@ class TaskConfigurations:
             cls.TOOL_IN_AIR = tool_pose_quat.copy()
             cls.TOOL_IN_AIR[1] -= cls.LIFT_HEIGHT  # Use inherited constant
             cls.TOOL_IN_AIR = cls.TOOL_IN_AIR.tolist()
+
+        @classmethod
+        def get_constraint_defs(cls):
+            """Return constraint definitions for this task.
+            
+            Each tuple: (type, name, args_dict)
+            - type: "grasp", "placement", or "complement"
+            - name: constraint name
+            - args: dict with keys depending on type
+              - grasp: gripper, obj, transform, mask
+              - placement/complement: obj, transform, mask
+            """
+            return [
+                ("grasp", "grasp", {
+                    "gripper": cls.GRIPPER_NAME,
+                    "obj": cls.TOOL_NAME,
+                    "transform": cls.TOOL_IN_GRIPPER,
+                    "mask": cls.GRASP_MASK,
+                }),
+                ("placement", "placement", {
+                    "obj": cls.TOOL_NAME,
+                    "transform": cls.TOOL_ON_DISPENSER,
+                    "mask": cls.PLACEMENT_MASK,
+                }),
+                ("complement", "placement", {
+                    "obj": cls.TOOL_NAME,
+                    "transform": cls.TOOL_ON_DISPENSER,
+                    "mask": cls.PLACEMENT_COMPLEMENT_MASK,
+                }),
+                ("grasp", "gripper_tool_aligned", {
+                    "gripper": cls.GRIPPER_NAME,
+                    "obj": cls.TOOL_NAME,
+                    "transform": cls.GRIPPER_ABOVE_TOOL,
+                    "mask": cls.GRASP_MASK,
+                }),
+                ("placement", "tool_in_air", {
+                    "obj": cls.TOOL_NAME,
+                    "transform": cls.TOOL_IN_AIR,
+                    "mask": cls.PLACEMENT_MASK,
+                }),
+                ("complement", "tool_in_air", {
+                    "obj": cls.TOOL_NAME,
+                    "transform": cls.TOOL_IN_AIR,
+                    "mask": cls.PLACEMENT_COMPLEMENT_MASK,
+                }),
+            ]
 
 
 __all__ = [
