@@ -25,6 +25,7 @@ import numpy as np
 
 from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
+from agimus_spacelab.planning.constraints import FactoryConstraintRegistry
 from agimus_spacelab.config.base_config import BaseTaskConfig
 from agimus_spacelab.visualization import (
     print_joint_info,
@@ -87,6 +88,7 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         self.config = GraspFrameGripperConfig
         self.use_factory = use_factory
+        self.pyhpp_constraints = {}
         
     def get_robot_names(self) -> List[str]:
         return self.config.ROBOT_NAMES
@@ -132,70 +134,81 @@ class GraspFrameGripperTask(ManipulationTask):
             )
     
     def create_constraints(self) -> None:
-        """Create all transformation constraints."""
-        # Factory mode creates constraints automatically
-        if self.use_factory:
-            print("    (Factory mode: constraints created automatically)")
-            return
+        """Create all transformation constraints for both backends.
         
+        In factory mode, uses FactoryConstraintRegistry to create constraints
+        with factory naming conventions:
+        - Grasp: "{gripper} grasps {handle}"
+        - Placement: "place_{object}"
+        - Complement: "{base}/complement"
+        
+        For CORBA, they're stored in the problem solver.
+        For PyHPP, they're stored in self.pyhpp_constraints and passed to
+        the factory constructor.
+        """
+        cfg = self.config
+
+        # Get robot reference (differs by backend)
+        robot = (
+            self.planner.get_robot()
+            if self.backend == "pyhpp"
+            else self.robot
+        )
+
+        if self.use_factory:
+            print("    Registering constraints for factory mode...")
+            self._create_factory_constraints(robot)
         else:
-            print("    Creating constraints manually")
-            # Get robot reference (differs by backend)
-            robot = (
-                self.planner.get_robot()
-                if self.backend == "pyhpp"
-                else self.robot
-            )
-            cb = ConstraintBuilder
-            cfg = self.config
+            print("    Creating constraints manually...")
+            self._create_manual_constraints(robot)
+
+        print("   ✓ Created transformation constraints")
+
+    def _create_factory_constraints(self, robot) -> None:
+        """Create constraints with factory naming using FactoryConstraintRegistry.
+        
+        Uses constraint definitions from config but registers them with
+        factory naming conventions.
+        """
+        cfg = self.config
+        
+        # Use FactoryConstraintRegistry for proper factory naming
+        registry = FactoryConstraintRegistry(
+            self.ps, robot=robot, backend=self.backend
+        )
+
+        # Get constraint definitions from config
+        constraint_defs = cfg.get_constraint_defs()
+        
+        # Object name for placement constraints (e.g., "frame_gripper")
+        obj_name = cfg.TOOL_NAME
+        
+        # Register all constraints with factory naming
+        # Maps user names -> factory names
+        self._constraint_name_map = registry.register_from_defs(
+            constraint_defs, obj_name
+        )
+
+        # Store for PyHPP graph building
+        self.pyhpp_constraints = registry.get_factory_constraints_arg()
+
+    def _create_manual_constraints(self, robot) -> None:
+        """Create constraints with custom naming (manual mode)."""
+        cfg = self.config
+        cb = ConstraintBuilder
+        
+        # Get constraint definitions from config
+        constraint_defs = cfg.get_constraint_defs()
+        
+        # Create all constraints from definitions
+        constraints = cb.create_constraints_from_defs(
+            self.ps, constraint_defs,
+            robot=robot, backend=self.backend
+        )
+
+        # Store for PyHPP graph building
+        self.pyhpp_constraints = constraints
             
-            # 1. Grasp: gripper holds tool
-            cb.create_grasp_constraint(
-                self.ps, "grasp",
-                cfg.GRIPPER_NAME, cfg.TOOL_NAME,
-                cfg.TOOL_IN_GRIPPER, cfg.GRASP_MASK,
-                robot=robot, backend=self.backend
-            )
-            
-            # 2. Placement: tool on dispenser (Z and rotations fixed)
-            cb.create_placement_constraint(
-                self.ps, "placement",
-                cfg.TOOL_NAME, cfg.TOOL_ON_DISPENSER,
-                cfg.PLACEMENT_MASK,
-                robot=robot, backend=self.backend
-            )
-            
-            # 3. Placement complement: X, Y free (sliding on surface)
-            cb.create_complement_constraint(
-                self.ps, "placement",
-                cfg.TOOL_NAME, cfg.TOOL_ON_DISPENSER,
-                cfg.PLACEMENT_COMPLEMENT_MASK,
-                robot=robot, backend=self.backend
-            )
-            
-            # 4. Gripper-tool aligned: gripper above tool
-            cb.create_grasp_constraint(
-                self.ps, "gripper_tool_aligned",
-                cfg.GRIPPER_NAME, cfg.TOOL_NAME,
-                cfg.GRIPPER_ABOVE_TOOL, cfg.GRASP_MASK,
-                robot=robot, backend=self.backend
-            )
-            
-            # 5. Tool in air: lifted position
-            cb.create_placement_constraint(
-                self.ps, "tool_in_air",
-                cfg.TOOL_NAME, cfg.TOOL_IN_AIR,
-                cfg.PLACEMENT_MASK,
-                robot=robot, backend=self.backend
-            )
-            
-            # 6. Tool in air complement
-            cb.create_complement_constraint(
-                self.ps, "tool_in_air",
-                cfg.TOOL_NAME, cfg.TOOL_IN_AIR,
-                cfg.PLACEMENT_COMPLEMENT_MASK,
-                robot=robot, backend=self.backend
-            )
         
     def create_graph(self):
         """Create and configure constraint graph."""
@@ -213,8 +226,12 @@ class GraspFrameGripperTask(ManipulationTask):
         )
 
         if self.use_factory:
+            # Pass pre-registered constraints to factory (PyHPP uses them
+            # directly; CORBA already has them in the problem solver)
             return self.graph_builder.build_graph_for_task(
-                _FactoryGraphTaskSpec, mode="factory"
+                _FactoryGraphTaskSpec,
+                mode="factory",
+                pyhpp_constraints=self.pyhpp_constraints,
             )
         else:
             return self._create_manual_graph()
