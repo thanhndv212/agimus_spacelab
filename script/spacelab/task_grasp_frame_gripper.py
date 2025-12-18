@@ -568,25 +568,25 @@ class GraspFrameGripperTask(ManipulationTask):
         # 4. Generate grasp config
         print("    4. Generating 'grasp-tool' config...")
         res, _ = cg.generate_via_edge(
-            "grasp-tool", cg.configs["q_above"], "q_grasp"
+            "grasp-tool", cg.configs["q_above"], "q_grasp_tool"
         )
         if not res:
             return cg.configs
-        cg.configs["q_grasp"] = self._freeze_vispa_joints(cg.configs["q_grasp"], q_ref)
+        cg.configs["q_grasp_tool"] = self._freeze_vispa_joints(cg.configs["q_grasp_tool"], q_ref)
             
         # 5. Project onto grasp-placement
         print("    5. Projecting onto 'grasp-placement' state...")
         cg.project_on_node(
-            "grasp-placement", cg.configs["q_grasp"], "q_grasp_place"
+            "grasp-placement", cg.configs["q_grasp_tool"], "q_grasp_placement"
         )
-        cg.configs["q_grasp_place"] = self._freeze_vispa_joints(
-            cg.configs["q_grasp_place"], q_ref
+        cg.configs["q_grasp_placement"] = self._freeze_vispa_joints(
+            cg.configs["q_grasp_placement"], q_ref
         )
         
         # 6. Generate lift config
         print("    6. Generating 'lift-tool' config...")
         res, _ = cg.generate_via_edge(
-            "lift-tool", cg.configs["q_grasp_place"], "q_lifted"
+            "lift-tool", cg.configs["q_grasp_placement"], "q_lifted"
         )
         if not res:
             return cg.configs
@@ -599,10 +599,22 @@ class GraspFrameGripperTask(ManipulationTask):
             cg.configs["q_tool_air"], q_ref
         )
 
-        # 8. Goal: use the lifted configuration as goal
-        cg.configs["q_goal"] = self._freeze_vispa_joints(
-            cg.configs["q_tool_air"], q_ref
+        # 8. Generate move-tool-away config
+        print("    8. Generating 'approach-dispenser' config...")
+        res, _ = cg.generate_via_edge(
+            "move-tool-away", cg.configs["q_tool_air"], "q_tool_away"
         )
+        if not res:
+            return cg.configs
+        # 9. Project onto grasp
+        print("    9. Projecting onto 'grasp' state...")
+        cg.project_on_node("grasp", cg.configs["q_tool_away"], "q_grasp")
+        cg.configs["q_grasp"] = self._freeze_vispa_joints(
+            cg.configs["q_grasp"], q_ref
+        )
+
+        # 10. Generate goal config
+        cg.configs["q_goal"] = cg.configs["q_grasp"]
         return cg.configs
 
 
@@ -642,11 +654,13 @@ def main(
         print_joint_info(task.robot)
         
     # Run task
-    preferred_configs = [
-                    "q_above",
-                    "q_grasp_place",
-                    "q_tool_air",
-                ]
+    
+    preferred_configs = [] if use_factory else [
+        # "q_above",
+        "q_grasp_placement",
+        "q_tool_air",
+        "q_grasp",
+        ]
     result = task.run(visualize=visualize, solve=solve,
                       preferred_configs=preferred_configs,
                       max_iterations=50000)
