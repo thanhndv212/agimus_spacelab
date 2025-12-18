@@ -31,11 +31,15 @@ class TaskConfigurations:
                            0.0, 0.0, 0.0, 1.0]
         GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.03,
                               0.0, 0.0, 0.0, 1.0]
+        # Tool poses (computed from initial config)
+        TOOL_ON_DISPENSER = None
         
+        TOOL_IN_AIR = None
+
         # Constraint masks (6 DOF: [x, y, z, rx, ry, rz])
         GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
-        PLACEMENT_MASK = [True, False, True, True, True, True]  # Z + rotations fixed
-        PLACEMENT_COMPLEMENT_MASK = [False, True, False, False, False, False]  # X, Y free
+        PLACEMENT_MASK = [True, False, True, True, True, True]  # X, Z + rotations fixed
+        PLACEMENT_COMPLEMENT_MASK = [False, True, False, False, False, False]  # Y free
         
         # Graph structure
         GRAPH_NODES = [
@@ -175,7 +179,9 @@ class TaskConfigurations:
         # Gripper and object names
         GRIPPER_NAME = "spacelab/g_ur10_tool"
         TOOL_NAME = "frame_gripper/h_FG_tool"
-        
+        # GRIPPER_NAME = "spacelab/ur10_joint_6_7"
+        # TOOL_NAME = "frame_gripper/root_joint"
+
         GRIPPER_JOINT = "spacelab/ur10_joint_6_7"
         TOOL_JOINT = "frame_gripper/root_joint"
 
@@ -198,9 +204,7 @@ class TaskConfigurations:
             "frame_gripper/h_FG_tool",
             # "screw_driver/h_SD_tool",
         ],}
-        # Tool poses (computed from initial config)
-        TOOL_ON_DISPENSER = None
-        TOOL_IN_AIR = None
+
         
         @classmethod
         def init_poses(cls):

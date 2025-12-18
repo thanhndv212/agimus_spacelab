@@ -321,18 +321,18 @@ class GraspFrameGripperTask(ManipulationTask):
                 self.ps.setConstantRightHandSide(constraint_name, is_constant)
             print("    ✓ Set constant right-hand side")
 
-            # Set security margins BEFORE initialize (CORBA only)
-            for edge_name in cfg.PLACEMENT_EDGES:
-                gb.graph.setSecurityMarginForEdge(
-                    edge_name,
-                    cfg.TOOL_CONTACT_JOINT,
-                    cfg.DISPENSER_CONTACT_JOINT,
-                    cfg.CONTACT_MARGIN,
-                )
-            print(
-                f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
-                "for placement edges"
-            )
+            # # Set security margins BEFORE initialize (CORBA only)
+            # for edge_name in cfg.PLACEMENT_EDGES:
+            #     gb.graph.setSecurityMarginForEdge(
+            #         edge_name,
+            #         cfg.TOOL_CONTACT_JOINT,
+            #         cfg.DISPENSER_CONTACT_JOINT,
+            #         cfg.CONTACT_MARGIN,
+            #     )
+            # print(
+            #     f"    ✓ Set security margin ({cfg.CONTACT_MARGIN}m) "
+            #     "for placement edges"
+            # )
 
         # Initialize graph
         gb.finalize_manual_graph()
@@ -606,6 +606,10 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
+        cg.configs["q_tool_away"] = self._freeze_vispa_joints(
+            cg.configs["q_tool_away"], q_ref
+        )
+        
         # 9. Project onto grasp
         print("    9. Projecting onto 'grasp' state...")
         cg.project_on_node("grasp", cg.configs["q_tool_away"], "q_grasp")
@@ -656,14 +660,14 @@ def main(
     # Run task
     
     preferred_configs = [] if use_factory else [
-        # "q_above",
+        "q_above",
         "q_grasp_placement",
         "q_tool_air",
-        "q_grasp",
+        # "q_grasp",
         ]
     result = task.run(visualize=visualize, solve=solve,
                       preferred_configs=preferred_configs,
-                      max_iterations=50000)
+                      max_iterations=1000)
     
     # Visualize handles and grippers if viewer available
     if visualize and result.get('viewer'):
