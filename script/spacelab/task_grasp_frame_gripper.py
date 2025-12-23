@@ -136,7 +136,10 @@ class GraspFrameGripperTask(ManipulationTask):
                 pyhpp_constraints=self.pyhpp_constraints,
             )
         else:
-            return self._create_manual_graph()
+            return self.graph_builder.create_manual_graph(
+                self.config,
+                pyhpp_constraints=self.pyhpp_constraints,
+            )
 
     def _create_manual_graph(self):
         """Create the manual graph using GraphBuilder (both backends)."""
