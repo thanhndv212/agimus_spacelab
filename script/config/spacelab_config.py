@@ -14,24 +14,46 @@ class TaskConfigurations:
         # Robot name
         ROBOT_NAMES = ["spacelab"]
         ENVIRONMENT_NAMES = ["ground_demo"]
-        OBJECTS = ["frame_gripper",
-                #    "screw_driver",
-                #    "RS1",
-                #    "RS2",
-                #    "RS3",
-                #    "RS4",
-                #    "RS5",
-                #    "RS6"
-                   ]
+
         # Joint groups
         ROBOTS = ["UR10", "VISPA_BASE", "VISPA_ARM"]
+
+        # Grippers
+        GRIPPERS = ["spacelab/g_ur10_tool"]
+        GRIPPER_NAME = "spacelab/g_ur10_tool"
+        GRIPPER_JOINT = "spacelab/ur10_joint_6_7"
+        # Objects to manipulate
+        OBJECTS = ["frame_gripper",
+                   ]
+        TOOL_NAME = "frame_gripper/h_FG_tool"
+        TOOL_JOINT = "frame_gripper/root_joint"
+        
+        # Handles per object
+        HANDLES_PER_OBJECT = [
+            ["frame_gripper/h_FG_tool"],  # frame_gripper
+        ]
+
+        # Contact surfaces per object
+        CONTACT_SURFACES_PER_OBJECT = [[] for _ in OBJECTS]
+
+        # Environment contact surfaces
+        ENVIRONMENT_CONTACTS = {
+            "ground_demo": ["ground_demo/ground_surface"],
+        }
+
+        # Valid gripper-object pairs
+        VALID_PAIRS = {
+            "spacelab/g_ur10_tool": [
+                "frame_gripper/h_FG_tool"
+                ]
+            }
 
         # Transform configurations (in xyzquat format)
         TOOL_IN_GRIPPER = [0.0, 0.0, 0.0,
                            0.0, 0.0, 0.0, 1.0]
         GRIPPER_ABOVE_TOOL = [0.0, 0.0, 0.03,
                               0.0, 0.0, 0.0, 1.0]
-        # Tool poses (computed from initial config)
+
         TOOL_ON_DISPENSER = None
         
         TOOL_IN_AIR = None
@@ -40,15 +62,6 @@ class TaskConfigurations:
         GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
         PLACEMENT_MASK = [True, False, True, True, True, True]  # X, Z + rotations fixed
         PLACEMENT_COMPLEMENT_MASK = [False, True, False, False, False, False]  # Y free
-        
-        # Graph structure
-        GRAPH_NODES = [
-            "grasp",
-            "tool-in-air",
-            "grasp-placement",
-            "gripper-above-tool",
-            "placement",
-        ]
 
         # ====================================================================
         # Graph Definition (Declarative)
@@ -163,6 +176,14 @@ class TaskConfigurations:
         DISPENSER_CONTACT_JOINT = "universe"
         CONTACT_MARGIN = -0.02  # Allow 2cm penetration
         
+        # Graph nodes
+        GRAPH_NODES = [
+            "grasp",
+            "tool-in-air",
+            "grasp-placement",
+            "gripper-above-tool",
+            "placement",
+        ]
         # Edges requiring surface contact security margins
         PLACEMENT_EDGES = [
             "transit", "approach-tool", "move-gripper-away",
@@ -174,36 +195,6 @@ class TaskConfigurations:
         PATH_PROJECTOR_STEP = 0.1
         MAX_RANDOM_ATTEMPTS = 1000
         LIFT_HEIGHT = 0.15  # Lift tool 15cm from dispenser
-
-
-        # Gripper and object names
-        GRIPPER_NAME = "spacelab/g_ur10_tool"
-        TOOL_NAME = "frame_gripper/h_FG_tool"
-        # GRIPPER_NAME = "spacelab/ur10_joint_6_7"
-        # TOOL_NAME = "frame_gripper/root_joint"
-
-        GRIPPER_JOINT = "spacelab/ur10_joint_6_7"
-        TOOL_JOINT = "frame_gripper/root_joint"
-
-        # Grippers (for factory mode)
-        GRIPPERS = ["spacelab/g_ur10_tool"]
-        
-        # Handles per object (for factory mode)
-        HANDLES_PER_OBJECT = [
-            ["frame_gripper/h_FG_tool"],  # frame_gripper
-            # ["screw_driver/h_SD_tool"],   # screw_driver
-            # ["RS1/h_RS1_FG"],              # RS1
-            # ["RS2/h_RS2_FG"],              # RS2
-            # ["RS3/h_RS3_FG"],              # RS3
-            # ["RS4/h_RS4_FG"],              # RS4
-            # ["RS5/h_RS5_FG"],              # RS5
-            # ["RS6/h_RS6_FG"],              # RS6
-        ]
-        VALID_PAIRS = {
-        "spacelab/g_ur10_tool": [
-            "frame_gripper/h_FG_tool",
-            # "screw_driver/h_SD_tool",
-        ],}
 
         
         @classmethod
