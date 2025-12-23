@@ -90,25 +90,7 @@ class GraspFrameGripperTask(ManipulationTask):
         self.use_factory = use_factory
         self.pyhpp_constraints = {}
         
-    def get_robot_names(self) -> List[str]:
-        return self.config.ROBOT_NAMES
-    
-    def get_composite_names(self) -> List[str]:
-        return self.config.ROBOT_NAMES
-    
-    def get_object_names(self) -> List[str]:
-        return self.config.OBJECTS
-    
-    def get_environment_names(self) -> List[str]:
-        return self.config.ENVIRONMENT_NAMES
-        
-    def get_joint_groups(self) -> List[str]:
-        """Return joint groups from configuration."""
-        return self.config.ROBOTS
 
-    def get_objects(self) -> List[str]:
-        """Return list of objects from configuration."""
-        return self.config.OBJECTS
         
     def setup_collision_management(self) -> None:
         """Disable collision between tool and dispenser surface."""
