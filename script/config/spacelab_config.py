@@ -41,6 +41,9 @@ class TaskConfigurations:
             "ground_demo": ["ground_demo/ground_surface"],
         }
 
+        # Rules for valid grasps
+        RULES = None
+        
         # Valid gripper-object pairs
         VALID_PAIRS = {
             "spacelab/g_ur10_tool": [
