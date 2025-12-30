@@ -1,55 +1,66 @@
 """
 Configuration classes for manipulation tasks.
 """
-from agimus_spacelab.config import InitialConfigurations
+
+from agimus_spacelab.config import ManipulationConfig
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
+
+
+class SpacelabTaskDefaults(ManipulationConfig):
+    """Task config base class.
+
+    Inherits SpaceLab-wide defaults from `ManipulationConfig` and provides
+    stable aliases to avoid name collisions with task-local fields.
+    """
+
+    GRIPPERS_INFO = ManipulationConfig.GRIPPERS
+    OBJECTS_INFO = ManipulationConfig.OBJECTS
+    VALID_PAIRS_INFO = ManipulationConfig.VALID_PAIRS
+
 
 class TaskConfigurations:
     """Task-specific configurations for common manipulation tasks."""
-    
+
     # Grasp Frame Gripper Task
-    class GraspFrameGripper:
+    class GraspFrameGripper(SpacelabTaskDefaults):
         """Configuration for UR10 grasping frame_gripper from dispenser."""
-        
-        # Robot name
-        ROBOT_NAMES = ["spacelab"]
-        ENVIRONMENT_NAMES = ["ground_demo"]
 
-        # Joint groups
         ROBOTS = ["UR10", "VISPA_BASE", "VISPA_ARM"]
+        OBJECTS = ["frame_gripper"]
 
-        # Grippers
-        GRIPPERS = ["spacelab/g_ur10_tool"]
-        GRIPPER_NAME = "spacelab/g_ur10_tool"
-        GRIPPER_JOINT = "spacelab/ur10_joint_6_7"
-        # Objects to manipulate
-        OBJECTS = ["frame_gripper",
-                   ]
-        TOOL_NAME = "frame_gripper/h_FG_tool"
-        TOOL_JOINT = "frame_gripper/root_joint"
-        
+        _GRIPPER_FRAME_TO_JOINT = SpacelabTaskDefaults.GRIPPERS_INFO[
+            "ur10"
+        ]
+        GRIPPER_NAME, GRIPPER_JOINT = next(
+            iter(_GRIPPER_FRAME_TO_JOINT.items())
+        )
+        GRIPPERS = [GRIPPER_NAME]
+
+        TOOL_NAME = SpacelabTaskDefaults.OBJECTS_INFO["frame_gripper"][
+            "handles"
+        ][0]
+        TOOL_JOINT = SpacelabTaskDefaults.OBJECTS_INFO["frame_gripper"][
+            "root_joint"
+        ]
+
         # Handles per object
         HANDLES_PER_OBJECT = [
-            ["frame_gripper/h_FG_tool"],  # frame_gripper
+            SpacelabTaskDefaults.OBJECTS_INFO[OBJECTS[0]]["handles"],
         ]
 
         # Contact surfaces per object
-        CONTACT_SURFACES_PER_OBJECT = [[] for _ in OBJECTS]
+        CONTACT_SURFACES_PER_OBJECT = [
+            SpacelabTaskDefaults.OBJECTS_INFO[OBJECTS[0]]["contact_surfaces"],
+        ]
 
         # Environment contact surfaces
-        ENVIRONMENT_CONTACTS = {
-            "ground_demo": ["ground_demo/ground_surface"],
-        }
+        ENVIRONMENT_CONTACTS = SpacelabTaskDefaults.ENVIRONMENT_CONTACTS
 
         # Rules for valid grasps
         RULES = None
-        
+
         # Valid gripper-object pairs
-        VALID_PAIRS = {
-            "spacelab/g_ur10_tool": [
-                "frame_gripper/h_FG_tool"
-                ]
-            }
+        VALID_PAIRS = {GRIPPER_NAME: [TOOL_NAME]}
 
         # Transform configurations (in xyzquat format)
         TOOL_IN_GRIPPER = [0.0, 0.0, 0.0,
@@ -58,13 +69,27 @@ class TaskConfigurations:
                               0.0, 0.0, 0.0, 1.0]
 
         TOOL_ON_DISPENSER = None
-        
+
         TOOL_IN_AIR = None
 
         # Constraint masks (6 DOF: [x, y, z, rx, ry, rz])
         GRASP_MASK = [True, True, True, True, True, True]  # All DOF fixed
-        PLACEMENT_MASK = [True, False, True, True, True, True]  # X, Z + rotations fixed
-        PLACEMENT_COMPLEMENT_MASK = [False, True, False, False, False, False]  # Y free
+        PLACEMENT_MASK = [
+            True,
+            False,
+            True,
+            True,
+            True,
+            True,
+        ]  # X, Z + rotations fixed
+        PLACEMENT_COMPLEMENT_MASK = [
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+        ]  # Y free
 
         # ====================================================================
         # Graph Definition (Declarative)
@@ -173,12 +198,12 @@ class TaskConfigurations:
                 "tool_in_air/complement": False,
             },
         }
-        
+
         # Collision parameters
         TOOL_CONTACT_JOINT = "frame_gripper/root_joint"
         DISPENSER_CONTACT_JOINT = "universe"
         CONTACT_MARGIN = -0.02  # Allow 2cm penetration
-        
+
         # Graph nodes
         GRAPH_NODES = [
             "grasp",
@@ -192,22 +217,23 @@ class TaskConfigurations:
             "transit", "approach-tool", "move-gripper-away",
             "grasp-tool", "release-tool", "lift-tool", "lower-tool",
         ]
-        
+
         # Planning parameters
         PATH_VALIDATION_STEP = 0.01
         PATH_PROJECTOR_STEP = 0.1
         MAX_RANDOM_ATTEMPTS = 1000
         LIFT_HEIGHT = 0.15  # Lift tool 15cm from dispenser
 
-        
         @classmethod
         def init_poses(cls):
             """Initialize tool poses from configuration."""
-            tool_pose_xyzrpy = InitialConfigurations.FRAME_GRIPPER
+            tool_pose_xyzrpy = SpacelabTaskDefaults.OBJECTS_INFO[
+                "frame_gripper"
+            ]["default_pose_xyzrpy"]
             tool_pose_quat = xyzrpy_to_xyzquat(tool_pose_xyzrpy)
-            
+
             cls.TOOL_ON_DISPENSER = tool_pose_quat.tolist()
-            
+
             # Lifted position
             cls.TOOL_IN_AIR = tool_pose_quat.copy()
             cls.TOOL_IN_AIR[1] -= cls.LIFT_HEIGHT  # Use inherited constant

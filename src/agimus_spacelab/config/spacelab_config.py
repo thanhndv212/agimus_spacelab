@@ -2,7 +2,7 @@
 Configuration classes for manipulation tasks.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 import numpy as np
 
 # Default URDF paths
@@ -268,17 +268,43 @@ class JointBounds:
 
 class ManipulationConfig:
     """Configuration for manipulation planning."""
-    
+
+    # ---------------------------------------------------------------------
+    # Defaults (robot/environment/object metadata)
+    # ---------------------------------------------------------------------
+
+    # Canonical model paths (URDF/SRDF), shared by all tasks.
+    MODEL_PATHS = DEFAULT_PATHS
+
+    # Default scene selection (tasks can override).
+    ROBOT_NAMES = ["spacelab"]
+    ENVIRONMENT_NAMES = ["ground_demo"]
+
+    # Named robot joint groups (used by tasks to decide what to move/freeze).
+    JOINT_GROUPS = {
+        "UR10": RobotJoints.UR10,
+        "VISPA_BASE": RobotJoints.VISPA_BASE,
+        "VISPA_ARM": RobotJoints.VISPA_ARM,
+    }
+
+    # Default environment contact surfaces (canonical dict form).
+    ENVIRONMENT_CONTACTS = {
+        "ground_demo": ["ground_demo/ground_surface"],
+    }
+
     # Define all grippers available on the robots
     GRIPPERS = {
-        "ur10_gripper": "spacelab/g_ur10_tool",
-        "vispa_gripper": "spacelab/g_vispa_tool",
-        "vispa2_gripper": "spacelab/g_vispa2_wb1",
-        "frame_gripper": "frame_gripper/h_FG_part",
-        "screw_driver": "screw_driver/g_SD_part",
-
+        "ur10": {"spacelab/g_ur10_tool": "spacelab/ur10_joint_6_7"},
+        "vispa": {"spacelab/g_vispa_tool": "spacelab/vispa_joint_6_7"},
+        "vispa2": {
+            "spacelab/g_vispa2_wb1": "spacelab/vispa2_joint_3_eeWorkbench"
+        },
+        "frame_gripper": {
+            "frame_gripper/g_FG_part": "frame_gripper/root_joint"
+        },
+        "screw_driver": {"screw_driver/g_SD_part": "screw_driver/root_joint"},
     }
-    
+
     # Define all objects and their handles
     OBJECTS = {
         "frame_gripper": {
@@ -286,67 +312,95 @@ class ManipulationConfig:
                 "frame_gripper/h_FG_tool",
             ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.FRAME_GRIPPER_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.FRAME_GRIPPER,
         },
         "screw_driver": {
             "handles": ["screw_driver/h_SD_tool"],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.SCREW_DRIVER_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.SCREW_DRIVER,
         },
         "RS1": {
-            "handles": ["RS1/h_RS1_FG", 
-                        "RS1/h_RS1_WB",
-                        "RS1/h_RS1_CON0",
-                        "RS1/h_RS1_CON1",
-                        "RS1/h_RS1_CON2",
-                        "RS1/h_RS1_CON3"],
+            "handles": [
+                "RS1/h_RS1_FG",
+                "RS1/h_RS1_WB",
+                "RS1/h_RS1_CON0",
+                "RS1/h_RS1_CON1",
+                "RS1/h_RS1_CON2",
+                "RS1/h_RS1_CON3",
+            ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.RS1_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.RS1,
         },
         "RS2": {
-            "handles": ["RS2/h_RS2_FG", 
-                        "RS2/h_RS2_WB",
-                        "RS2/h_RS2_CON0",
-                        "RS2/h_RS2_CON1",
-                        "RS2/h_RS2_CON2",
-                        "RS2/h_RS2_CON3"],
+            "handles": [
+                "RS2/h_RS2_FG",
+                "RS2/h_RS2_WB",
+                "RS2/h_RS2_CON0",
+                "RS2/h_RS2_CON1",
+                "RS2/h_RS2_CON2",
+                "RS2/h_RS2_CON3",
+            ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.RS2_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.RS2,
         },
         "RS3": {
-            "handles": ["RS3/h_RS3_FG", 
-                        "RS3/h_RS3_WB",
-                        "RS3/h_RS3_CON0",
-                        "RS3/h_RS3_CON1",
-                        "RS3/h_RS3_CON2",
-                        "RS3/h_RS3_CON3"],
+            "handles": [
+                "RS3/h_RS3_FG",
+                "RS3/h_RS3_WB",
+                "RS3/h_RS3_CON0",
+                "RS3/h_RS3_CON1",
+                "RS3/h_RS3_CON2",
+                "RS3/h_RS3_CON3",
+            ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.RS3_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.RS3,
         },
         "RS4": {
-            "handles": ["RS4/h_RS4_FG", 
-                        "RS4/h_RS4_WB",
-                        "RS4/h_RS4_CON0",
-                        "RS4/h_RS4_CON1",
-                        "RS4/h_RS4_CON2",
-                        "RS4/h_RS4_CON3"],
+            "handles": [
+                "RS4/h_RS4_FG",
+                "RS4/h_RS4_WB",
+                "RS4/h_RS4_CON0",
+                "RS4/h_RS4_CON1",
+                "RS4/h_RS4_CON2",
+                "RS4/h_RS4_CON3",
+            ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.RS4_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.RS4,
         },
         "RS5": {
-            "handles": ["RS5/h_RS5_FG", 
-                        "RS5/h_RS5_WB",
-                        "RS5/h_RS5_CON0",
-                        "RS5/h_RS5_CON1",
-                        "RS5/h_RS5_CON2",
-                        "RS5/h_RS5_CON3"],
+            "handles": [
+                "RS5/h_RS5_FG",
+                "RS5/h_RS5_WB",
+                "RS5/h_RS5_CON0",
+                "RS5/h_RS5_CON1",
+                "RS5/h_RS5_CON2",
+                "RS5/h_RS5_CON3",
+            ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.RS5_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.RS5,
         },
         "RS6": {
-            "handles": ["RS6/h_RS6_FG", 
-                        "RS6/h_RS6_WB",
-                        "RS6/h_RS6_CON0",
-                        "RS6/h_RS6_CON1",
-                        "RS6/h_RS6_CON2",
-                        "RS6/h_RS6_CON3"],
+            "handles": [
+                "RS6/h_RS6_FG",
+                "RS6/h_RS6_WB",
+                "RS6/h_RS6_CON0",
+                "RS6/h_RS6_CON1",
+                "RS6/h_RS6_CON2",
+                "RS6/h_RS6_CON3",
+            ],
             "contact_surfaces": [],
+            "root_joint": RobotJoints.RS6_ROOT,
+            "default_pose_xyzrpy": InitialConfigurations.RS6,
         },
     }
-    
+
     # Define valid gripper-handle pairs
     VALID_PAIRS = {
         "spacelab/g_ur10_tool": [
@@ -400,9 +454,6 @@ class ManipulationConfig:
             "RS6/h_RS6_CON3",
         ]
     }
-    
-    # Environment contact surfaces
-    ENV_CONTACTS = ["ground_demo/surface"]
 
 
 __all__ = [
