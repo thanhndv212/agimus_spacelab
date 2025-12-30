@@ -11,24 +11,22 @@ Loads and visualizes the complete SpaceLab scene with:
 Usage:
     python visualize_scene.py                    # Load all objects
     python visualize_scene.py --objects RS1 RS2  # Load specific objects
-    python visualize_scene.py --minimal          # Load minimal scene (robots + environment only)
+    python visualize_scene.py --minimal          # Robots + environment only
 """
 
-import sys
 import argparse
-from pathlib import Path
 from typing import List, Optional
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
-
-from spacelab_config import InitialConfigurations, RobotJoints
+from agimus_spacelab.config.spacelab_config import (
+    InitialConfigurations,
+    ManipulationConfig,
+)
 from agimus_spacelab.planning import SceneBuilder
 from agimus_spacelab.utils import xyzrpy_to_xyzquat
 
 try:
     from hpp.gepetto.manipulation import ViewerFactory
-    from hpp.gepetto import PathPlayer
+
     HAS_GEPETTO = True
 except ImportError:
     HAS_GEPETTO = False
@@ -37,47 +35,65 @@ except ImportError:
 
 class SceneVisualizer:
     """Handles scene visualization with gepetto-viewer."""
-    
+
     def __init__(self):
         """Initialize the visualizer."""
         self.planner = None
         self.viewer_factory = None
         self.viewer = None
-        
-    def setup_scene(self, objects: Optional[List[str]] = None) -> None:
+        self.loaded_objects: List[str] = []
+
+    def setup_scene(self, objects: Optional[List[str]] = None) -> List[str]:
         """
         Set up the scene with robots, environment, and objects.
         
         Args:
             objects: List of object names to load. If None, loads all.
         """
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("SPACELAB SCENE SETUP")
         print("=" * 70)
-        
-        # Default objects if none specified
+
+        # Default objects if none specified.
+        # Prefer canonical OBJECTS (has poses/handles), then include any extra
+        # URDF-only objects from MODEL_PATHS.
         if objects is None:
-            objects = [
-                "RS1", "RS2", "RS3", "RS4", "RS5", "RS6",
-                "frame_gripper", "screw_driver", "cleat_gripper"
+            objects = list(ManipulationConfig.OBJECTS.keys())
+            extra = [
+                name
+                for name in ManipulationConfig.MODEL_PATHS.get("objects", {})
+                if name not in objects
             ]
-        
-        # Build scene using fluent API
-        builder = SceneBuilder()
-        
+            objects.extend(extra)
+
+        # Build scene using fluent API, with canonical file paths.
+        builder = SceneBuilder(FILE_PATHS=ManipulationConfig.MODEL_PATHS)
+
         print("\n1. Loading robots and environment...")
-        builder.load_robot()
-        builder.load_environment()
-        
+        robot_names = list(getattr(ManipulationConfig, "ROBOT_NAMES", []))
+        composite_names = list(robot_names)
+        environment_names = list(
+            getattr(ManipulationConfig, "ENVIRONMENT_NAMES", [])
+        )
+
+        builder.load_robot(
+            composite_names=composite_names,
+            robot_names=robot_names,
+        )
+        builder.load_environment(environment_names=environment_names)
+
         print(f"\n2. Loading objects: {', '.join(objects)}")
         builder.load_objects(objects)
-        
+
         print("\n3. Setting joint bounds...")
         builder.set_joint_bounds()
-        
+
         self.planner = builder.planner
+        self.loaded_objects = list(objects)
         print("\n✓ Scene setup complete!")
-        
+
+        return self.loaded_objects
+
     def create_initial_configuration(self, objects: List[str]) -> List[float]:
         """
         Create initial configuration with all robots and objects.
@@ -88,79 +104,83 @@ class SceneVisualizer:
         Returns:
             Complete configuration vector
         """
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("INITIAL CONFIGURATION")
-        print("="*70)
-        
+        print("=" * 70)
+
         q = []
-        
-        # UR10 joints (6 DOF)
-        print(f"\nUR10 joints ({len(InitialConfigurations.UR10)} DOF):")
-        q.extend(InitialConfigurations.UR10)
-        print(f"  {InitialConfigurations.UR10}")
-        
-        # VISPA base (2 DOF)
-        print(f"\nVISPA base ({len(InitialConfigurations.VISPA_BASE)} DOF):")
-        q.extend(InitialConfigurations.VISPA_BASE)
-        print(f"  {InitialConfigurations.VISPA_BASE}")
-        
-        # VISPA arm (6 DOF)
-        print(f"\nVISPA arm ({len(InitialConfigurations.VISPA_ARM)} DOF):")
-        q.extend(InitialConfigurations.VISPA_ARM)
-        print(f"  {InitialConfigurations.VISPA_ARM}")
-        
+
+        # Robot joint groups (order matters, matches composite robot model).
+        robot_groups = ["UR10", "VISPA_BASE", "VISPA_ARM"]
+        for group in robot_groups:
+            values = list(getattr(InitialConfigurations, group, []))
+            if not values:
+                continue
+            print(f"\n{group} ({len(values)} DOF):")
+            q.extend(values)
+            print(f"  {values}")
+
         # Object poses (7 DOF each: xyz + quaternion)
         print("\nObject poses (XYZQUAT):")
-        object_configs = {
-            "RS1": InitialConfigurations.RS1,
-            "RS2": InitialConfigurations.RS2,
-            "RS3": InitialConfigurations.RS3,
-            "RS4": InitialConfigurations.RS4,
-            "RS5": InitialConfigurations.RS5,
-            "RS6": InitialConfigurations.RS6,
-            "frame_gripper": InitialConfigurations.FRAME_GRIPPER,
-            "screw_driver": InitialConfigurations.SCREW_DRIVER,
-            "cleat_gripper": InitialConfigurations.CLEAT_GRIPPER,
-        }
-        
+
         for obj_name in objects:
-            if obj_name in object_configs:
-                xyzrpy = object_configs[obj_name]
-                xyzquat = xyzrpy_to_xyzquat(xyzrpy)
-                q.extend(xyzquat)
-                print(f"  {obj_name}: xyz=({xyzquat[0]:.3f}, {xyzquat[1]:.3f}, {xyzquat[2]:.3f})")
-        
+            xyzrpy = None
+
+            if obj_name in ManipulationConfig.OBJECTS:
+                xyzrpy = ManipulationConfig.OBJECTS[obj_name].get(
+                    "default_pose_xyzrpy"
+                )
+
+            if xyzrpy is None:
+                # Fallback to InitialConfigurations constants if present.
+                attr = obj_name.upper().replace("-", "_")
+                xyzrpy = getattr(InitialConfigurations, attr, None)
+
+            if xyzrpy is None:
+                continue
+
+            xyzquat = xyzrpy_to_xyzquat(xyzrpy)
+            q.extend(xyzquat)
+            print(
+                f"  {obj_name}: xyz=("
+                f"{xyzquat[0]:.3f}, {xyzquat[1]:.3f}, {xyzquat[2]:.3f})"
+            )
+
         print(f"\n✓ Configuration size: {len(q)} DOF")
         return q
-        
+
     def initialize_viewer(self) -> None:
         """Initialize gepetto viewer."""
         if not HAS_GEPETTO:
             print("\n⚠ Gepetto viewer not available")
             return
-            
-        print("\n" + "="*70)
+
+        print("\n" + "=" * 70)
         print("VIEWER INITIALIZATION")
-        print("="*70)
-        
+        print("=" * 70)
+
         try:
             print("\nCreating viewer factory...")
-            self.viewer_factory = ViewerFactory(self.planner.ps)
-            
+            # Prefer the backend's ViewerFactory (it has already loaded
+            # environment + objects via planner.load_environment/load_object).
+            self.viewer_factory = getattr(self.planner, "vf", None)
+            if self.viewer_factory is None:
+                self.viewer_factory = ViewerFactory(self.planner.ps)
+
             print("Launching gepetto-viewer...")
             self.viewer = self.viewer_factory.createViewer()
-            
+
             print("\n✓ Viewer ready!")
             print("\n  A gepetto-viewer window should now be open.")
             print("  Use mouse to navigate:")
             print("    - Left click + drag: Rotate")
             print("    - Right click + drag: Pan")
             print("    - Scroll: Zoom")
-            
+
         except Exception as e:
             print(f"\n✗ Failed to initialize viewer: {e}")
             print("  Make sure gepetto-gui is installed and running.")
-            
+
     def display_configuration(self, q: List[float]) -> None:
         """
         Display a configuration in the viewer.
@@ -171,14 +191,14 @@ class SceneVisualizer:
         if not self.viewer:
             print("⚠ No viewer available")
             return
-            
+
         try:
             # Use the viewer callable to display configuration
             self.viewer(q)
-            print(f"\n✓ Displaying configuration in viewer")
+            print("\n✓ Displaying configuration in viewer")
         except Exception as e:
             print(f"✗ Failed to display configuration: {e}")
-            
+
     def run_interactive(self, q: List[float]) -> None:
         """
         Run interactive mode with configuration display.
@@ -189,47 +209,49 @@ class SceneVisualizer:
         if not self.viewer:
             print("\n⚠ Interactive mode requires gepetto viewer")
             return
-            
-        print("\n" + "="*70)
+
+        print("\n" + "=" * 70)
         print("INTERACTIVE MODE")
-        print("="*70)
-        
+        print("=" * 70)
+
         self.display_configuration(q)
-        
+
         print("\nAvailable commands:")
         print("  q / quit / exit - Exit")
         print("  h / help        - Show this help")
         print("  refresh / r     - Refresh display")
         print("  info / i        - Show scene info")
-        
+
         while True:
             try:
                 cmd = input("\nviewer> ").strip().lower()
-                
+
                 if cmd in ['q', 'quit', 'exit']:
                     print("Exiting...")
                     break
-                    
+
                 elif cmd in ['h', 'help']:
                     print("\nAvailable commands:")
                     print("  q / quit / exit - Exit")
                     print("  h / help        - Show this help")
                     print("  refresh / r     - Refresh display")
                     print("  info / i        - Show scene info")
-                    
+
                 elif cmd in ['r', 'refresh']:
                     self.display_configuration(q)
                     print("✓ Display refreshed")
-                    
+
                 elif cmd in ['i', 'info']:
-                    print(f"\nScene information:")
+                    print("\nScene information:")
                     print(f"  Configuration DOF: {len(q)}")
-                    print(f"  Robots: UR10, VISPA")
-                    
+                    print("  Robots: UR10, VISPA")
+                    if self.loaded_objects:
+                        print(f"  Objects: {', '.join(self.loaded_objects)}")
+
                 else:
                     if cmd:
                         print(f"Unknown command: '{cmd}'. Type 'h' for help.")
-                        
+
             except (EOFError, KeyboardInterrupt):
                 print("\nExiting...")
                 break
@@ -273,35 +295,32 @@ Examples:
 def main():
     """Main visualization script."""
     args = parse_args()
-    
+
     # Determine which objects to load
     if args.minimal:
         objects = []
     elif args.objects:
         objects = args.objects
     else:
-        # Default: all objects
-        objects = [
-            "RS1", "RS2", "RS3", "RS4", "RS5", "RS6",
-            "frame_gripper", "screw_driver", "cleat_gripper"
-        ]
-    
+        # Default: let `setup_scene()` pick canonical objects.
+        objects = None
+
     # Create visualizer
     visualizer = SceneVisualizer()
-    
+
     # Setup scene
-    visualizer.setup_scene(objects)
-    
+    loaded_objects = visualizer.setup_scene(objects)
+
     # Create initial configuration
-    q_init = visualizer.create_initial_configuration(objects)
-    
+    q_init = visualizer.create_initial_configuration(loaded_objects)
+
     # Initialize viewer
     visualizer.initialize_viewer()
-    
+
     # Display configuration
     if visualizer.viewer:
         visualizer.display_configuration(q_init)
-    
+
     # Interactive mode
     if not args.no_interactive and HAS_GEPETTO:
         try:
@@ -309,13 +328,16 @@ def main():
         except KeyboardInterrupt:
             print("\n\nInterrupted by user")
     else:
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("Scene loaded successfully!")
-        print("="*70)
+        print("=" * 70)
         if not HAS_GEPETTO:
             print("\nNote: Install gepetto-viewer for visualization:")
-            print("  Viewer would show: robots, environment, and all loaded objects")
-    
+            print(
+                "  Viewer would show: robots, environment, "
+                "and all loaded objects"
+            )
+
     print("\nDone.")
 
 
