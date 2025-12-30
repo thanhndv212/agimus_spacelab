@@ -403,8 +403,8 @@ def main(
     # Create and setup task
     task = GraspFrameGripperTask(use_factory=use_factory, backend=backend)
     task.setup(
-        validation_step=GraspFrameGripperConfig.PATH_VALIDATION_STEP,
-        projector_step=GraspFrameGripperConfig.PATH_PROJECTOR_STEP
+        validation_step=task.task_config.PATH_VALIDATION_STEP,
+        projector_step=task.task_config.PATH_PROJECTOR_STEP
     )
     
     # Print joint info if requested
@@ -436,7 +436,7 @@ def main(
         else:
             handle_names = [
                 handle
-                for handles in GraspFrameGripperConfig.HANDLES_PER_OBJECT
+                for handles in task.task_config.HANDLES_PER_OBJECT
                 for handle in handles
             ]
         
@@ -451,7 +451,7 @@ def main(
         )
         
         # Visualize grippers with approach arrows
-        gripper_names = GraspFrameGripperConfig.GRIPPERS
+        gripper_names = task.task_config.GRIPPERS
         visualize_all_grippers(
             viewer, gripper_names,
             show_approach=False,
