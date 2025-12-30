@@ -19,7 +19,6 @@ Task features:
 import sys
 from pathlib import Path
 from typing import List, Dict
-from collections import deque
 
 import numpy as np
 
@@ -27,6 +26,10 @@ from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
 from agimus_spacelab.planning.constraints import FactoryConstraintRegistry
 from agimus_spacelab.config.base_config import BaseTaskConfig
+from agimus_spacelab.planning.config import (
+    bfs_edge_path,
+    freeze_joints_by_substrings,
+)
 from agimus_spacelab.visualization import (
     print_joint_info,
     visualize_constraint_graph,
@@ -53,7 +56,7 @@ class GraspFrameGripperTask(ManipulationTask):
 
     # VISPA arms are not used in this task; keep them fixed during planning.
     FREEZE_JOINT_SUBSTRINGS = ["vispa"]
-    
+
     def __init__(self, use_factory: bool = False, backend: str = "corba"):
         """
         Initialize task.
@@ -124,80 +127,16 @@ class GraspFrameGripperTask(ManipulationTask):
         states = list(getattr(self.graph_builder, "states", {}).keys())
         return states[0] if states else ""
 
-    def _freeze_vispa_joints(self, q: List[float], q_ref: List[float]) -> List[float]:
-        """Keep VISPA and VISPA2 joint values constant.
-
-        This task only moves UR10 and the grasped object. Projections and random
-        shooting can otherwise drift VISPA/VISPA2 joints.
-        """
-        if self.backend != "corba":
-            return q
-
-        robot = self.robot
-        if robot is None:
-            return q
-
-        q_out = list(q)
-        try:
-            joint_names = robot.getJointNames()
-        except Exception:
-            return q_out
-
-        for joint in joint_names:
-            if "vispa" not in joint:
-                continue
-            try:
-                rank = robot.rankInConfiguration[joint]
-                size = robot.getJointConfigSize(joint)
-            except Exception:
-                continue
-            if size <= 0:
-                continue
-            if rank + size > len(q_out) or rank + size > len(q_ref):
-                continue
-            q_out[rank : rank + size] = q_ref[rank : rank + size]
-
-        return q_out
-
-    @staticmethod
-    def _bfs_edge_path(
-        start_state: str,
-        goal_state: str,
-        edge_topology: Dict[str, tuple[str, str]],
-    ) -> List[str]:
-        """Find a directed edge-name path from start_state to goal_state."""
-        adjacency: Dict[str, List[tuple[str, str]]] = {}
-        for edge_name, (src, dst) in edge_topology.items():
-            adjacency.setdefault(src, []).append((dst, edge_name))
-
-        queue: deque[str] = deque([start_state])
-        prev_state: Dict[str, str] = {}
-        prev_edge: Dict[str, str] = {}
-        visited = {start_state}
-
-        while queue:
-            state = queue.popleft()
-            if state == goal_state:
-                break
-            for nxt, edge_name in adjacency.get(state, []):
-                if nxt in visited:
-                    continue
-                visited.add(nxt)
-                prev_state[nxt] = state
-                prev_edge[nxt] = edge_name
-                queue.append(nxt)
-
-        if goal_state not in visited:
-            return []
-
-        # Reconstruct path
-        edges: List[str] = []
-        cur = goal_state
-        while cur != start_state:
-            edges.append(prev_edge[cur])
-            cur = prev_state[cur]
-        edges.reverse()
-        return edges
+    def _freeze_unused_joints(
+        self, q: List[float], q_ref: List[float]
+    ) -> List[float]:
+        return freeze_joints_by_substrings(
+            self.robot,
+            q,
+            q_ref,
+            self.FREEZE_JOINT_SUBSTRINGS,
+            backend=self.backend,
+        )
 
     def generate_configurations(
         self, q_init: List[float]
@@ -209,7 +148,7 @@ class GraspFrameGripperTask(ManipulationTask):
 
         # Update max attempts
         cg.max_attempts = self.task_config.MAX_RANDOM_ATTEMPTS
-        
+
         if self.use_factory:
             print("    Factory mode: generating a pick+hold goal")
 
@@ -238,11 +177,11 @@ class GraspFrameGripperTask(ManipulationTask):
 
             # Ensure we start exactly in the detected start state.
             cg.project_on_node(start_state, q_init, "q_init")
-            cg.configs["q_init"] = self._freeze_vispa_joints(
+            cg.configs["q_init"] = self._freeze_unused_joints(
                 cg.configs["q_init"], q_ref
             )
 
-            edge_path = self._bfs_edge_path(
+            edge_path = bfs_edge_path(
                 start_state,
                 goal_state,
                 self.graph_builder.get_edge_topology(),
@@ -259,7 +198,7 @@ class GraspFrameGripperTask(ManipulationTask):
                 q_current = cg.configs["q_init"]
                 try:
                     cg.project_on_node(goal_state, q_current, "q_goal")
-                    cg.configs["q_goal"] = self._freeze_vispa_joints(
+                    cg.configs["q_goal"] = self._freeze_unused_joints(
                         cg.configs["q_goal"], q_ref
                     )
                 except Exception as exc:
@@ -288,19 +227,22 @@ class GraspFrameGripperTask(ManipulationTask):
                     raise RuntimeError(
                         "Failed generating config via edge '%s'" % edge_name
                     )
-                q_next_frozen = self._freeze_vispa_joints(q_next, q_ref)
+                q_next_frozen = self._freeze_unused_joints(q_next, q_ref)
                 cg.configs[label] = q_next_frozen
                 q_current = q_next_frozen
 
-            cg.configs["q_goal"] = self._freeze_vispa_joints(q_current, q_ref)
+            cg.configs["q_goal"] = self._freeze_unused_joints(q_current, q_ref)
             print(f"    ✓ Goal state: {goal_state}")
             return cg.configs
 
         # 1. Project initial onto placement
         print("    1. Projecting onto 'placement' state...")
         cg.project_on_node("placement", q_init, "q_init")
-        cg.configs["q_init"] = self._freeze_vispa_joints(cg.configs["q_init"], q_ref)
-        
+        cg.configs["q_init"] = self._freeze_unused_joints(
+            cg.configs["q_init"],
+            q_ref,
+        )
+
         # 2. Generate approach config
         print("    2. Generating 'approach-tool' config...")
         res, _ = cg.generate_via_edge(
@@ -308,17 +250,20 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_approach"] = self._freeze_vispa_joints(
+        cg.configs["q_approach"] = self._freeze_unused_joints(
             cg.configs["q_approach"], q_ref
         )
-            
+
         # 3. Project onto gripper-above-tool
         print("    3. Projecting onto 'gripper-above-tool' state...")
         cg.project_on_node(
             "gripper-above-tool", cg.configs["q_approach"], "q_above"
         )
-        cg.configs["q_above"] = self._freeze_vispa_joints(cg.configs["q_above"], q_ref)
-        
+        cg.configs["q_above"] = self._freeze_unused_joints(
+            cg.configs["q_above"],
+            q_ref,
+        )
+
         # 4. Generate grasp config
         print("    4. Generating 'grasp-tool' config...")
         res, _ = cg.generate_via_edge(
@@ -326,17 +271,20 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_grasp_tool"] = self._freeze_vispa_joints(cg.configs["q_grasp_tool"], q_ref)
-            
+        cg.configs["q_grasp_tool"] = self._freeze_unused_joints(
+            cg.configs["q_grasp_tool"],
+            q_ref,
+        )
+
         # 5. Project onto grasp-placement
         print("    5. Projecting onto 'grasp-placement' state...")
         cg.project_on_node(
             "grasp-placement", cg.configs["q_grasp_tool"], "q_grasp_placement"
         )
-        cg.configs["q_grasp_placement"] = self._freeze_vispa_joints(
+        cg.configs["q_grasp_placement"] = self._freeze_unused_joints(
             cg.configs["q_grasp_placement"], q_ref
         )
-        
+
         # 6. Generate lift config
         print("    6. Generating 'lift-tool' config...")
         res, _ = cg.generate_via_edge(
@@ -344,12 +292,15 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_lifted"] = self._freeze_vispa_joints(cg.configs["q_lifted"], q_ref)
-            
+        cg.configs["q_lifted"] = self._freeze_unused_joints(
+            cg.configs["q_lifted"],
+            q_ref,
+        )
+
         # 7. Project onto tool-in-air
         print("    7. Projecting onto 'tool-in-air' state...")
         cg.project_on_node("tool-in-air", cg.configs["q_lifted"], "q_tool_air")
-        cg.configs["q_tool_air"] = self._freeze_vispa_joints(
+        cg.configs["q_tool_air"] = self._freeze_unused_joints(
             cg.configs["q_tool_air"], q_ref
         )
 
@@ -360,14 +311,14 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_tool_away"] = self._freeze_vispa_joints(
+        cg.configs["q_tool_away"] = self._freeze_unused_joints(
             cg.configs["q_tool_away"], q_ref
         )
-        
+
         # 9. Project onto grasp
         print("    9. Projecting onto 'grasp' state...")
         cg.project_on_node("grasp", cg.configs["q_tool_away"], "q_grasp")
-        cg.configs["q_grasp"] = self._freeze_vispa_joints(
+        cg.configs["q_grasp"] = self._freeze_unused_joints(
             cg.configs["q_grasp"], q_ref
         )
 
@@ -399,37 +350,44 @@ def main(
         backend: "corba" or "pyhpp" - which backend to use
     """
     print(f"Using backend: {backend.upper()}")
-    
+
     # Create and setup task
     task = GraspFrameGripperTask(use_factory=use_factory, backend=backend)
     task.setup(
         validation_step=task.task_config.PATH_VALIDATION_STEP,
         projector_step=task.task_config.PATH_PROJECTOR_STEP
     )
-    
+
     # Print joint info if requested
     if show_joints:
         print_joint_info(task.robot)
-        
+
     # Run task
-    
-    preferred_configs = [] if use_factory else [
-        "q_above",
-        "q_grasp_placement",
-        "q_tool_air",
-        # "q_grasp",
+
+    preferred_configs = (
+        []
+        if use_factory
+        else [
+            # "q_above",
+            # "q_grasp_placement",
+            # "q_tool_air",
+            # "q_grasp",
         ]
-    result = task.run(visualize=visualize, solve=solve,
-                      preferred_configs=preferred_configs,
-                      max_iterations=1000)
-    
+    )
+    result = task.run(
+        visualize=visualize,
+        solve=solve,
+        preferred_configs=preferred_configs,
+        max_iterations=5000,
+    )
+
     # Visualize handles and grippers if viewer available
     if visualize and result.get('viewer'):
         print("\n" + "=" * 70)
         print("Visualizing Handles and Grippers")
         print("=" * 70)
         viewer = result['viewer']
-        
+
         # Collect all handle names
         if task.use_factory and getattr(task.graph_builder, "factory", None):
             handle_names = task.graph_builder.factory.handles
@@ -439,7 +397,7 @@ def main(
                 for handles in task.task_config.HANDLES_PER_OBJECT
                 for handle in handles
             ]
-        
+
         # Visualize handles with approach arrows
         visualize_all_handles(
             viewer, handle_names,
@@ -449,7 +407,7 @@ def main(
             axis_length=0.05,
             arrow_length=0.1
         )
-        
+
         # Visualize grippers with approach arrows
         gripper_names = task.task_config.GRIPPERS
         visualize_all_grippers(
@@ -461,7 +419,7 @@ def main(
             arrow_length=0.1
         )
         viewer.client.gui.refresh()
-    
+
     # Print summary
     print("\n" + "=" * 70)
     print("Results Summary")
@@ -487,7 +445,7 @@ def main(
         edges_dict=edges_dict,
         edge_topology=edge_topology
     )
-    
+
     return task, result
 
 
