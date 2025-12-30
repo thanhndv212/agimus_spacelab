@@ -38,34 +38,15 @@ from agimus_spacelab.visualization import (
 config_dir = Path(__file__).parent.parent / "config"
 sys.path.insert(0, str(config_dir))
 
-from spacelab_config import TaskConfigurations  # noqa: E402
 
+def initialize_task_config() -> None:
+    """Initialize GraspFrameGripperConfig with derived parameters."""
+    from spacelab_config import TaskConfigurations  # noqa: E402
+    GraspFrameGripperConfig = TaskConfigurations.GraspFrameGripper
+    # Initialize poses
+    GraspFrameGripperConfig.init_poses()
+    return GraspFrameGripperConfig
 
-# ============================================================================
-# Task Configuration
-# ============================================================================
-GraspFrameGripperConfig = TaskConfigurations.GraspFrameGripper
-# Initialize poses
-GraspFrameGripperConfig.init_poses()
-
-
-class _FactoryGraphTaskSpec(BaseTaskConfig):
-    """Adapter to use GraphBuilder.build_graph_for_task in factory mode."""
-
-    ROBOT_NAMES = GraspFrameGripperConfig.ROBOT_NAMES
-    ENVIRONMENT_NAMES = GraspFrameGripperConfig.ENVIRONMENT_NAMES
-    OBJECTS = GraspFrameGripperConfig.OBJECTS
-
-    GRIPPERS = GraspFrameGripperConfig.GRIPPERS
-    HANDLES_PER_OBJECT = GraspFrameGripperConfig.HANDLES_PER_OBJECT
-    CONTACT_SURFACES_PER_OBJECT = [[] for _ in OBJECTS]
-    ENVIRONMENT_CONTACTS = ["ground_demo/tools_dispenser_surface"]
-    VALID_PAIRS = GraspFrameGripperConfig.VALID_PAIRS
-
-
-# ============================================================================
-# Task Implementation
-# ============================================================================
 
 class GraspFrameGripperTask(ManipulationTask):
     """UR10 grasps frame_gripper from dispenser."""
@@ -86,7 +67,7 @@ class GraspFrameGripperTask(ManipulationTask):
             task_name="Spacelab Manipulation: UR10 Grasps Frame Gripper",
             backend=backend
         )
-        self.config = GraspFrameGripperConfig
+        self.task_config = initialize_task_config()
         self.use_factory = use_factory
         self.pyhpp_constraints = {}
 
@@ -94,7 +75,7 @@ class GraspFrameGripperTask(ManipulationTask):
         """Disable collision between tool and dispenser surface."""
         self.scene_builder.disable_collision_pair(
             "ground_demo/link_TD_0",  # Dispenser surface
-            self.config.TOOL_CONTACT_JOINT,
+            self.task_config.TOOL_CONTACT_JOINT,
             remove_collision=True,
             remove_distance=False
         )
@@ -106,7 +87,7 @@ class GraspFrameGripperTask(ManipulationTask):
         if self.backend == "corba":
             self.scene_builder.disable_collisions_between_subtrees(
                 "spacelab/ur10_link_7",
-                self.config.TOOL_CONTACT_JOINT,
+                self.task_config.TOOL_CONTACT_JOINT,
                 remove_collision=True,
                 remove_distance=False,
                 verbose=True,
@@ -136,7 +117,7 @@ class GraspFrameGripperTask(ManipulationTask):
                 pass
 
         # Fallback: guess a reasonable start state.
-        place_name = f"place_{self.config.OBJECTS[0]}"
+        place_name = f"place_{self.task_config.OBJECTS[0]}"
         if place_name in getattr(self.graph_builder, "states", {}):
             return place_name
         # As a last resort, return any state name.
@@ -223,18 +204,17 @@ class GraspFrameGripperTask(ManipulationTask):
     ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
         cg = self.config_gen
-        cfg = self.config
 
         q_ref = list(q_init)
 
         # Update max attempts
-        cg.max_attempts = cfg.MAX_RANDOM_ATTEMPTS
+        cg.max_attempts = self.task_config.MAX_RANDOM_ATTEMPTS
         
         if self.use_factory:
             print("    Factory mode: generating a pick+hold goal")
 
-            gripper = cfg.GRIPPERS[0]
-            handle = cfg.HANDLES_PER_OBJECT[0][0]
+            gripper = self.task_config.GRIPPERS[0]
+            handle = self.task_config.HANDLES_PER_OBJECT[0][0]
             desired_grasp = f"{gripper} grasps {handle}"
 
             all_states = list(self.graph_builder.get_states().keys())
