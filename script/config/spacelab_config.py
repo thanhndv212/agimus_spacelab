@@ -21,6 +21,105 @@ class SpacelabTaskDefaults(ManipulationConfig):
 class TaskConfigurations:
     """Task-specific configurations for common manipulation tasks."""
 
+    class DisplayAllStates(SpacelabTaskDefaults):
+        """Catch-all config for exploring feasible goal states.
+
+        Design intent:
+        - Include all objects from canonical `ManipulationConfig.OBJECTS`.
+        - Keep constraints/transform configs/masks empty placeholders.
+        - Provide helpers to enumerate feasible goal states (e.g. grasps)
+          from canonical `VALID_PAIRS`.
+
+        This is meant for debug/visualization and for quickly generating a
+        feasible target (goal) given a constraint/state naming convention.
+        """
+
+        # ------------------------------------------------------------------
+        # Scene selection
+        # ------------------------------------------------------------------
+
+        # Include all known robot joint groups by default.
+        ROBOTS = list(SpacelabTaskDefaults.JOINT_GROUPS.keys())
+
+        # Include all canonical objects by default.
+        OBJECTS = list(SpacelabTaskDefaults.OBJECTS_INFO.keys())
+
+        # Some task plumbing expects a TOOL_NAME attribute even when there are
+        # no explicit constraint defs. Use the first object as a harmless
+        # placeholder.
+        TOOL_NAME = OBJECTS[0] if OBJECTS else ""
+
+        # Include all known gripper frames (flatten canonical nested schema).
+        GRIPPERS = [
+            gripper_frame
+            for _group, mapping in SpacelabTaskDefaults.GRIPPERS_INFO.items()
+            for gripper_frame in mapping.keys()
+        ]
+
+        # Per-object handles and contacts.
+        HANDLES_PER_OBJECT = [
+            SpacelabTaskDefaults.OBJECTS_INFO[obj]["handles"]
+            for obj in OBJECTS
+        ]
+        CONTACT_SURFACES_PER_OBJECT = [
+            SpacelabTaskDefaults.OBJECTS_INFO[obj]["contact_surfaces"]
+            for obj in OBJECTS
+        ]
+
+        # Environment contact surfaces (canonical).
+        ENVIRONMENT_CONTACTS = SpacelabTaskDefaults.ENVIRONMENT_CONTACTS
+
+        # ------------------------------------------------------------------
+        # Planning constraints (placeholders)
+        # ------------------------------------------------------------------
+
+        # Canonical mapping gripper_frame -> [handle, ...]
+        VALID_PAIRS = SpacelabTaskDefaults.VALID_PAIRS_INFO
+
+        # Optional rule set for ConstraintGraphFactory (leave empty for now).
+        RULES = None
+
+        # Placeholders for task-specific transforms and masks.
+        # The task can fill these as needed.
+        TRANSFORMS = {}
+        MASKS = {}
+
+        # Generic numeric defaults used by tasks.
+        PATH_VALIDATION_STEP = 0.01
+        PATH_PROJECTOR_STEP = 0.1
+        MAX_RANDOM_ATTEMPTS = 1000
+
+        @classmethod
+        def init_poses(cls):
+            """Initialize any derived poses.
+
+            Intentionally empty: this catch-all config does not prescribe
+            object-relative transforms.
+            """
+
+        @classmethod
+        def get_constraint_defs(cls):
+            """Return constraint definitions for this task.
+
+            Intentionally empty: fill this in for a specific experiment.
+            """
+
+            return []
+
+        @classmethod
+        def feasible_grasp_goal_states(cls):
+            """Enumerate feasible grasp goal state names.
+
+            This follows the factory naming pattern used elsewhere:
+            - "<gripper_frame> grasps <handle>"
+            """
+
+            goals = []
+            for gripper, handles in cls.VALID_PAIRS.items():
+                for handle in handles:
+                    goals.append(f"{gripper} grasps {handle}")
+            return goals
+
     # Grasp Frame Gripper Task
     class GraspFrameGripper(SpacelabTaskDefaults):
         """Configuration for UR10 grasping frame_gripper from dispenser."""
