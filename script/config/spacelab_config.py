@@ -113,12 +113,88 @@ class TaskConfigurations:
             This follows the factory naming pattern used elsewhere:
             - "<gripper_frame> grasps <handle>"
             """
-
             goals = []
             for gripper, handles in cls.VALID_PAIRS.items():
                 for handle in handles:
                     goals.append(f"{gripper} grasps {handle}")
             return goals
+
+        @classmethod
+        def with_grasp_goals(cls, goal_states):
+            """Return a derived config with VALID_PAIRS filtered to goals.
+
+            This dramatically reduces factory graph size by only including
+            the gripper-handle pairs actually needed for the specified goals.
+
+            Args:
+                goal_states: Iterable of goal state strings, e.g.
+                    ["spacelab/g_ur10_tool grasps frame_gripper/h_FG_tool"]
+                    Strings not matching "<gripper> grasps <handle>" ignored.
+
+            Returns:
+                A derived config class with minimal VALID_PAIRS, OBJECTS,
+                GRIPPERS, and HANDLES_PER_OBJECT.
+            """
+            import re
+
+            # Parse goal states to extract (gripper, handle) pairs
+            pattern = re.compile(r"^(.+)\s+grasps\s+(.+)$")
+            needed_pairs = {}  # gripper -> set of handles
+            for goal in goal_states:
+                m = pattern.match(goal.strip())
+                if m:
+                    gripper, handle = m.group(1), m.group(2)
+                    needed_pairs.setdefault(gripper, set()).add(handle)
+
+            if not needed_pairs:
+                raise ValueError(
+                    "No valid grasp goals found. Expected format: "
+                    "'<gripper> grasps <handle>'"
+                )
+
+            # Determine which objects contain the needed handles
+            handle_to_object = {}
+            for obj, info in cls.OBJECTS_INFO.items():
+                for h in info.get("handles", []):
+                    handle_to_object[h] = obj
+
+            needed_objects = set()
+            for handles in needed_pairs.values():
+                for h in handles:
+                    obj = handle_to_object.get(h)
+                    if obj:
+                        needed_objects.add(obj)
+
+            if not needed_objects:
+                raise ValueError(
+                    f"Could not find objects for handles: {needed_pairs}"
+                )
+
+            # Build minimal config
+            objects = [o for o in cls.OBJECTS if o in needed_objects]
+            grippers = [g for g in cls.GRIPPERS if g in needed_pairs]
+
+            handles_per_object = [
+                cls.OBJECTS_INFO[obj]["handles"] for obj in objects
+            ]
+            contacts_per_object = [
+                cls.OBJECTS_INFO[obj]["contact_surfaces"] for obj in objects
+            ]
+
+            # Build filtered VALID_PAIRS (only requested grasps)
+            valid_pairs = {}
+            for g in grippers:
+                valid_pairs[g] = list(needed_pairs.get(g, []))
+
+            # Create derived class
+            Filtered = type("DisplayAllStatesFiltered", (cls,), {})
+            Filtered.OBJECTS = objects
+            Filtered.GRIPPERS = grippers
+            Filtered.HANDLES_PER_OBJECT = handles_per_object
+            Filtered.CONTACT_SURFACES_PER_OBJECT = contacts_per_object
+            Filtered.VALID_PAIRS = valid_pairs
+            Filtered.TOOL_NAME = objects[0] if objects else ""
+            return Filtered
 
     # Grasp Frame Gripper Task
     class GraspFrameGripper(SpacelabTaskDefaults):
