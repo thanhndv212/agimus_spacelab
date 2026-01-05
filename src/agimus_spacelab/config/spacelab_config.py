@@ -405,10 +405,10 @@ class ManipulationConfig:
     VALID_PAIRS = {
         "spacelab/g_ur10_tool": [
             "frame_gripper/h_FG_tool",
-            "screw_driver/h_SD_tool",
+            # "screw_driver/h_SD_tool",
         ],
         "spacelab/g_vispa_tool": [
-            "frame_gripper/h_FG_tool",
+            # "frame_gripper/h_FG_tool",
             "screw_driver/h_SD_tool",
         ],
         "spacelab/g_vispa2_wb1": [
