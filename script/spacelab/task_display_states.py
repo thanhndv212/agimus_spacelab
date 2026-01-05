@@ -357,7 +357,6 @@ class DisplayStatesTask(ManipulationTask):
                         state_configs[to_st] = label
                         visited.add(to_st)
                         queue.append(to_st)
-                        print(f"    ✓ {label} (via '{edge_name}')")
                 except Exception as e:
                     print(f"    ⚠ Failed {to_st}: {e}")
 
