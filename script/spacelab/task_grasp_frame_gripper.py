@@ -128,7 +128,9 @@ class GraspFrameGripperTask(ManipulationTask):
     ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
         cg = self.config_gen
-
+        if q_init is None:
+            raise ValueError("q_init must be provided")
+        
         # Update max attempts
         cg.max_attempts = self.task_config.MAX_RANDOM_ATTEMPTS
 
@@ -300,7 +302,8 @@ def main(
     task = GraspFrameGripperTask(use_factory=use_factory, backend=backend)
     task.setup(
         validation_step=task.task_config.PATH_VALIDATION_STEP,
-        projector_step=task.task_config.PATH_PROJECTOR_STEP
+        projector_step=task.task_config.PATH_PROJECTOR_STEP,
+        freeze_joint_substrings=GraspFrameGripperTask.FREEZE_JOINT_SUBSTRINGS
     )
 
     # Print joint info if requested
