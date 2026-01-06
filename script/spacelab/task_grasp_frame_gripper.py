@@ -23,12 +23,8 @@ from typing import List, Dict
 import numpy as np
 
 from agimus_spacelab.tasks import ManipulationTask
-from agimus_spacelab.planning import GraphBuilder, ConstraintBuilder
-from agimus_spacelab.planning.constraints import FactoryConstraintRegistry
-from agimus_spacelab.config.base_config import BaseTaskConfig
 from agimus_spacelab.planning.config import (
     bfs_edge_path,
-    freeze_joints_by_substrings,
 )
 from agimus_spacelab.visualization import (
     print_joint_info,
@@ -127,24 +123,11 @@ class GraspFrameGripperTask(ManipulationTask):
         states = list(getattr(self.graph_builder, "states", {}).keys())
         return states[0] if states else ""
 
-    def _freeze_unused_joints(
-        self, q: List[float], q_ref: List[float]
-    ) -> List[float]:
-        return freeze_joints_by_substrings(
-            self.robot,
-            q,
-            q_ref,
-            self.FREEZE_JOINT_SUBSTRINGS,
-            backend=self.backend,
-        )
-
     def generate_configurations(
         self, q_init: List[float]
     ) -> Dict[str, List[float]]:
         """Generate all waypoint configurations."""
         cg = self.config_gen
-
-        q_ref = list(q_init)
 
         # Update max attempts
         cg.max_attempts = self.task_config.MAX_RANDOM_ATTEMPTS
@@ -177,9 +160,6 @@ class GraspFrameGripperTask(ManipulationTask):
 
             # Ensure we start exactly in the detected start state.
             cg.project_on_node(start_state, q_init, "q_init")
-            cg.configs["q_init"] = self._freeze_unused_joints(
-                cg.configs["q_init"], q_ref
-            )
 
             edge_path = bfs_edge_path(
                 start_state,
@@ -198,9 +178,6 @@ class GraspFrameGripperTask(ManipulationTask):
                 q_current = cg.configs["q_init"]
                 try:
                     cg.project_on_node(goal_state, q_current, "q_goal")
-                    cg.configs["q_goal"] = self._freeze_unused_joints(
-                        cg.configs["q_goal"], q_ref
-                    )
                 except Exception as exc:
                     raise RuntimeError(
                         "No path found in factory graph from '%s' to '%s', "
@@ -227,21 +204,16 @@ class GraspFrameGripperTask(ManipulationTask):
                     raise RuntimeError(
                         "Failed generating config via edge '%s'" % edge_name
                     )
-                q_next_frozen = self._freeze_unused_joints(q_next, q_ref)
-                cg.configs[label] = q_next_frozen
-                q_current = q_next_frozen
+                cg.configs[label] = q_next
+                q_current = q_next
 
-            cg.configs["q_goal"] = self._freeze_unused_joints(q_current, q_ref)
+            cg.configs["q_goal"] = q_current
             print(f"    ✓ Goal state: {goal_state}")
             return cg.configs
 
         # 1. Project initial onto placement
         print("    1. Projecting onto 'placement' state...")
         cg.project_on_node("placement", q_init, "q_init")
-        cg.configs["q_init"] = self._freeze_unused_joints(
-            cg.configs["q_init"],
-            q_ref,
-        )
 
         # 2. Generate approach config
         print("    2. Generating 'approach-tool' config...")
@@ -250,18 +222,11 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_approach"] = self._freeze_unused_joints(
-            cg.configs["q_approach"], q_ref
-        )
 
         # 3. Project onto gripper-above-tool
         print("    3. Projecting onto 'gripper-above-tool' state...")
         cg.project_on_node(
             "gripper-above-tool", cg.configs["q_approach"], "q_above"
-        )
-        cg.configs["q_above"] = self._freeze_unused_joints(
-            cg.configs["q_above"],
-            q_ref,
         )
 
         # 4. Generate grasp config
@@ -271,18 +236,11 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_grasp_tool"] = self._freeze_unused_joints(
-            cg.configs["q_grasp_tool"],
-            q_ref,
-        )
 
         # 5. Project onto grasp-placement
         print("    5. Projecting onto 'grasp-placement' state...")
         cg.project_on_node(
             "grasp-placement", cg.configs["q_grasp_tool"], "q_grasp_placement"
-        )
-        cg.configs["q_grasp_placement"] = self._freeze_unused_joints(
-            cg.configs["q_grasp_placement"], q_ref
         )
 
         # 6. Generate lift config
@@ -292,17 +250,10 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_lifted"] = self._freeze_unused_joints(
-            cg.configs["q_lifted"],
-            q_ref,
-        )
 
         # 7. Project onto tool-in-air
         print("    7. Projecting onto 'tool-in-air' state...")
         cg.project_on_node("tool-in-air", cg.configs["q_lifted"], "q_tool_air")
-        cg.configs["q_tool_air"] = self._freeze_unused_joints(
-            cg.configs["q_tool_air"], q_ref
-        )
 
         # 8. Generate move-tool-away config
         print("    8. Generating 'approach-dispenser' config...")
@@ -311,16 +262,10 @@ class GraspFrameGripperTask(ManipulationTask):
         )
         if not res:
             return cg.configs
-        cg.configs["q_tool_away"] = self._freeze_unused_joints(
-            cg.configs["q_tool_away"], q_ref
-        )
 
         # 9. Project onto grasp
         print("    9. Projecting onto 'grasp' state...")
         cg.project_on_node("grasp", cg.configs["q_tool_away"], "q_grasp")
-        cg.configs["q_grasp"] = self._freeze_unused_joints(
-            cg.configs["q_grasp"], q_ref
-        )
 
         # 10. Generate goal config
         cg.configs["q_goal"] = cg.configs["q_grasp"]
