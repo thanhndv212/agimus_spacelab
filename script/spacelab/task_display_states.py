@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from agimus_spacelab.tasks import ManipulationTask
+from agimus_spacelab.visualization import visualize_constraint_graph
 
 
 # Add config directory
@@ -260,6 +261,38 @@ def interactive_visualize_configs(task, configs: Dict[str, List[float]]):
         input("Press Enter to continue...")
 
 
+def interactive_main_menu(task, configs: Dict[str, List[float]]):
+    """Interactive main menu with multiple options."""
+    while True:
+        options = [
+            "Browse configurations",
+            "Visualize constraint graph",
+            "[Exit]",
+        ]
+
+        selected = interactive_menu(
+            "Select action:",
+            options,
+            multi_select=False,
+        )
+
+        if not selected or selected[0] == 2:  # Exit
+            break
+
+        if selected[0] == 0:  # Browse configurations
+            interactive_visualize_configs(task, configs)
+
+        elif selected[0] == 1:  # Visualize constraint graph
+            print("\n=== Constraint Graph Visualization ===")
+            output_path = "/tmp/constraint_graph"
+            visualize_constraint_graph(
+                task.graph_builder,
+                output_path=output_path,
+                show_png=True,
+            )
+            input("Press Enter to continue...")
+
+
 class DisplayStatesTask(ManipulationTask):
     """Build a factory graph and project to a feasible goal state."""
 
@@ -463,6 +496,16 @@ def main(argv: list[str] | None = None) -> int:
             "browse configurations"
         ),
     )
+    parser.add_argument(
+        "--graph-viz",
+        nargs="?",
+        const="/tmp/constraint_graph",
+        metavar="PATH",
+        help=(
+            "Visualize constraint graph as PNG. Optionally specify output "
+            "path (default: /tmp/constraint_graph). Requires matplotlib."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -526,10 +569,20 @@ def main(argv: list[str] | None = None) -> int:
 
     configs = result.get("configs", {})
 
-    # Interactive mode: browse configurations with arrow keys
-    if args.interactive and configs:
-        print("\n=== Interactive Configuration Viewer ===")
-        interactive_visualize_configs(task, configs)
+    # Visualize constraint graph if requested (non-interactive)
+    if args.graph_viz and not args.interactive:
+        print("\n=== Constraint Graph Visualization ===")
+        output_path = args.graph_viz
+        visualize_constraint_graph(
+            task.graph_builder,
+            output_path=output_path,
+            show_png=True,
+        )
+
+    # Interactive mode: main menu with multiple options
+    if args.interactive:
+        print("\n=== Interactive Mode ===")
+        interactive_main_menu(task, configs)
 
     # Handle --show: display specific configurations
     elif args.show:
