@@ -398,6 +398,33 @@ class TaskConfigurations:
         PATH_PROJECTOR_STEP = 0.1
         MAX_RANDOM_ATTEMPTS = 1000
         LIFT_HEIGHT = 0.15  # Lift tool 15cm from dispenser
+        PATH_OPTIMIZER = "SplineGradientBased_bezier3"
+        # | Name | Description |
+        # |------|-------------|
+        # | `"RandomShortcut"` | Random shortcut optimizer - tries random shortcuts between configurations |
+        # | `"SimpleShortcut"` | Simple shortcut optimizer |
+        # | `"PartialShortcut"` | Partial shortcut optimizer - shortcuts that preserve some path structure |
+        # | `"SimpleTimeParameterization"` | Adds time parameterization to paths |
+        # | `"RSTimeParameterization"` | Reeds-Shepp time parameterization |
+
+        # **Manipulation-specific (hpp-manipulation):**
+
+        # | Name | Description |
+        # |------|-------------|
+        # | `"RandomShortcut"` | Manipulation-aware random shortcut (overrides core version) |
+        # | `"Graph-RandomShortcut"` | Graph-aware random shortcut for constraint graphs |
+        # | `"PartialShortcut"` | Manipulation-aware partial shortcut |
+        # | `"Graph-PartialShortcut"` | Graph-aware partial shortcut for constraint graphs |
+        # | `"EnforceTransitionSemantic"` | Enforces transition semantics in manipulation graphs |
+
+        # **Plugin-based (require `ps.loadPlugin()`):**
+
+        # | Name | Plugin | Description |
+        # |------|--------|-------------|
+        # | `"SplineGradientBased_bezier1"` | `spline-gradient-based.so` | Spline optimization with Bezier basis, order 1 |
+        # | `"SplineGradientBased_bezier3"` | `spline-gradient-based.so` | Spline optimization with Bezier basis, order 3 |
+        # | `"SplineGradientBased_bezier5"` | `spline-gradient-based.so` | Spline optimization with Bezier basis, order 5 |
+        # | `"TOPPRA"` | `toppra.so` | Time-optimal path parameterization |
 
         @classmethod
         def init_poses(cls):
