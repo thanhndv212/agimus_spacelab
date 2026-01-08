@@ -267,6 +267,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
         options = [
             "Browse configurations",
             "Visualize constraint graph",
+            "Solve planning problem",
             "[Exit]",
         ]
 
@@ -276,7 +277,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
             multi_select=False,
         )
 
-        if not selected or selected[0] == 2:  # Exit
+        if not selected or selected[0] == 3:  # Exit
             break
 
         if selected[0] == 0:  # Browse configurations
@@ -290,6 +291,23 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
                 output_path=output_path,
                 show_png=True,
             )
+            input("Press Enter to continue...")
+
+        elif selected[0] == 2:  # Solve planning problem
+            print("\n=== Solve Planning Problem ===")
+            try:
+                result = task.run(
+                    visualize=True,
+                    solve=True,
+                    preferred_configs=[],
+                    max_iterations=5000,
+                )
+                if result.get("solved", False):
+                    print("Planning succeeded!")
+                else:
+                    print("Planning completed (check output for details).")
+            except Exception as e:
+                print(f"Planning error: {e}")
             input("Press Enter to continue...")
 
 
