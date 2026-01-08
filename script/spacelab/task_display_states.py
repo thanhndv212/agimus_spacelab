@@ -313,7 +313,9 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
 
 class DisplayStatesTask(ManipulationTask):
     """Build a factory graph and project to a feasible goal state."""
-
+    # VISPA arms are not used in this task; keep them fixed during planning.
+    FREEZE_JOINT_SUBSTRINGS = ["vispa"]
+    
     def __init__(self, backend: str = "corba"):
         super().__init__(
             task_name="Spacelab Manipulation: Display All Factory States",
@@ -576,6 +578,7 @@ def main(argv: list[str] | None = None) -> int:
     task.setup(
         validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
         projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
+        freeze_joint_substrings=DisplayStatesTask.FREEZE_JOINT_SUBSTRINGS,
     )
 
     result = task.run(
