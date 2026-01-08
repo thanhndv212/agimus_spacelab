@@ -297,7 +297,12 @@ class ManipulationConfig:
         "ur10": {"spacelab/g_ur10_tool": "spacelab/ur10_joint_6_7"},
         "vispa": {"spacelab/g_vispa_tool": "spacelab/vispa_joint_6_7"},
         "vispa2": {
-            "spacelab/g_vispa2_wb1": "spacelab/vispa2_joint_3_eeWorkbench"
+            "spacelab/g_vispa2_wb1": "spacelab/vispa2_joint_3_eeWorkbench",
+            "spacelab/g_vispa2_wb2": "spacelab/vispa2_joint_3_eeWorkbench",
+            "spacelab/g_vispa2_wb3": "spacelab/vispa2_joint_3_eeWorkbench",
+            "spacelab/g_vispa2_wb4": "spacelab/vispa2_joint_3_eeWorkbench",
+            "spacelab/g_vispa2_wb5": "spacelab/vispa2_joint_3_eeWorkbench",
+            "spacelab/g_vispa2_wb6": "spacelab/vispa2_joint_3_eeWorkbench",
         },
         "frame_gripper": {
             "frame_gripper/g_FG_part": "frame_gripper/root_joint"
@@ -413,10 +418,20 @@ class ManipulationConfig:
         ],
         "spacelab/g_vispa2_wb1": [
             "RS1/h_RS1_WB",
+        ],
+        "spacelab/g_vispa2_wb2": [
             "RS2/h_RS2_WB",
+        ],
+        "spacelab/g_vispa2_wb3": [
             "RS3/h_RS3_WB",
+        ],
+        "spacelab/g_vispa2_wb4": [
             "RS4/h_RS4_WB",
+        ],
+        "spacelab/g_vispa2_wb5": [
             "RS5/h_RS5_WB",
+        ],
+        "spacelab/g_vispa2_wb6": [
             "RS6/h_RS6_WB",
         ],
         "frame_gripper/g_FG_part": [
@@ -452,7 +467,7 @@ class ManipulationConfig:
             "RS6/h_RS6_CON1",
             "RS6/h_RS6_CON2",
             "RS6/h_RS6_CON3",
-        ]
+        ],
     }
 
 
