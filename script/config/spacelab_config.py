@@ -88,6 +88,7 @@ class TaskConfigurations:
         PATH_VALIDATION_STEP = 0.01
         PATH_PROJECTOR_STEP = 0.1
         MAX_RANDOM_ATTEMPTS = 1000
+        PATH_OPTIMIZER = "SplineGradientBased_bezier3"
 
         @classmethod
         def init_poses(cls):
