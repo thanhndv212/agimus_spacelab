@@ -156,7 +156,7 @@ def interactive_menu(
                 _move_cursor_up(lines_to_clear)
 
                 if multi_select:
-                    return sorted(checked) if checked else [cursor]
+                    return sorted(checked)
                 return [cursor]
             elif key in ("q", "Q", "\x03"):  # q or Ctrl+C
                 for _ in range(lines_to_clear):
@@ -237,6 +237,39 @@ def interactive_select_pairs(cfg) -> List[str]:
     return [all_goals[i - 1] for i in selected if i > 0]
 
 
+def interactive_select_frozen_arms(
+    default_substrings: List[str],
+) -> List[str]:
+    """Interactively select joint-name substrings to freeze during planning.
+
+    Options are intentionally simple and map directly to substrings searched in
+    joint names.
+
+    Args:
+        default_substrings: Substrings to use if the user quits.
+
+    Returns:
+        List of selected substrings. If the user quits without selecting,
+        returns default_substrings.
+    """
+    options = ["vispa_", "vispa2", "ur10"]
+    initial_selected = [
+        i for i, opt in enumerate(options) if opt in set(default_substrings)
+    ]
+
+    selected = interactive_menu(
+        "Select arm(s) to lock (freeze joints):",
+        options,
+        multi_select=True,
+        selected=initial_selected,
+    )
+
+    if not selected:
+        return list(default_substrings)
+
+    return [options[i] for i in selected if 0 <= i < len(options)]
+
+
 def interactive_visualize_configs(task, configs: Dict[str, List[float]]):
     """Interactively select and visualize configurations."""
     if not configs:
@@ -314,7 +347,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
 class DisplayStatesTask(ManipulationTask):
     """Build a factory graph and project to a feasible goal state."""
     # VISPA arms are not used in this task; keep them fixed during planning.
-    FREEZE_JOINT_SUBSTRINGS = ["vispa"]
+    FREEZE_JOINT_SUBSTRINGS = []
     
     def __init__(self, backend: str = "corba"):
         super().__init__(
@@ -575,12 +608,23 @@ def main(argv: list[str] | None = None) -> int:
             print(s)
         return 0
 
+    freeze_joint_substrings = list(DisplayStatesTask.FREEZE_JOINT_SUBSTRINGS)
+    if args.interactive:
+        print("\n=== Interactive Locked-Arm Selection ===")
+        freeze_joint_substrings = interactive_select_frozen_arms(
+            freeze_joint_substrings
+        )
+        print(
+            "Using freeze_joint_substrings: "
+            f"{freeze_joint_substrings if freeze_joint_substrings else '[]'}"
+        )
+
     task = DisplayStatesTask(backend=args.backend)
     task.task_config = cfg  # Use filtered config
     task.setup(
         validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
         projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
-        freeze_joint_substrings=DisplayStatesTask.FREEZE_JOINT_SUBSTRINGS,
+        freeze_joint_substrings=freeze_joint_substrings,
     )
 
     result = task.run(
