@@ -511,13 +511,13 @@ class DisplayStatesTask(ManipulationTask):
 
         # Set q_goal to a grasp state if available
         desired = list(self.task_config.feasible_grasp_goal_states())
-        feasible = [s for s in desired if s in state_configs]
+        feasible = [s for s in desired if s in state_configs.keys()]
+        goal_state = None
 
-        # Select feasible grasp state with most "grasps" occurrences.
-        # Fallback to the last generated state.
-        if feasible:
-            goal_state = max(feasible, key=lambda s: s.count("grasps"))
-        else:
+        # Select state with most "grasps" occurrences
+        goal_state = max(all_states, key=lambda s: s.count("grasps"))
+        if goal_state is None:
+            # Use last generated config
             goal_state = list(state_configs.keys())[-1]
         cg.configs["q_goal"] = cg.configs[state_configs[goal_state]]
         print(f"    Selected goal state: {goal_state}")
