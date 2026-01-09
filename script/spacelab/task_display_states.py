@@ -294,6 +294,52 @@ def interactive_visualize_configs(task, configs: Dict[str, List[float]]):
         input("Press Enter to continue...")
 
 
+def _get_num_paths(task) -> int:
+    """Best-effort number of available stored paths for replay."""
+    planner = getattr(task, "planner", None)
+    if planner is None:
+        return 0
+
+    # CORBA backend exposes ProblemSolver via planner.ps
+    ps = getattr(planner, "ps", None)
+    if ps is not None and hasattr(ps, "numberPaths"):
+        try:
+            return int(ps.numberPaths())
+        except Exception:
+            return 0
+
+    # PyHPP backend typically stores a single path in planner.path
+    path = getattr(planner, "path", None)
+    return 1 if path is not None else 0
+
+
+def interactive_replay_path(task) -> None:
+    """Interactively select a path id and replay it."""
+    num_paths = _get_num_paths(task)
+    if num_paths <= 0:
+        print("No paths available to replay (run Solve first).")
+        input("Press Enter to continue...")
+        return
+
+    options = [f"Path {i}" for i in range(num_paths)] + ["[Exit]"]
+    selected = interactive_menu(
+        "Select path to replay:",
+        options,
+        multi_select=False,
+    )
+
+    if not selected or selected[0] >= num_paths:
+        return
+
+    path_id = int(selected[0])
+    print(f"\n=== Replaying Path {path_id} ===")
+    try:
+        task.planner.play_path(path_id)
+    except Exception as e:
+        print(f"Failed to replay path {path_id}: {e}")
+    input("Press Enter to continue...")
+
+
 def interactive_main_menu(task, configs: Dict[str, List[float]]):
     """Interactive main menu with multiple options."""
     while True:
@@ -301,6 +347,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
             "Browse configurations",
             "Visualize constraint graph",
             "Solve planning problem",
+            "Replay path",
             "[Exit]",
         ]
 
@@ -310,7 +357,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
             multi_select=False,
         )
 
-        if not selected or selected[0] == 3:  # Exit
+        if not selected or selected[0] == 4:  # Exit
             break
 
         if selected[0] == 0:  # Browse configurations
@@ -343,12 +390,15 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
                 print(f"Planning error: {e}")
             input("Press Enter to continue...")
 
+        elif selected[0] == 3:  # Replay path
+            interactive_replay_path(task)
+
 
 class DisplayStatesTask(ManipulationTask):
     """Build a factory graph and project to a feasible goal state."""
     # VISPA arms are not used in this task; keep them fixed during planning.
     FREEZE_JOINT_SUBSTRINGS = []
-    
+
     def __init__(self, backend: str = "corba"):
         super().__init__(
             task_name="Spacelab Manipulation: Display All Factory States",
@@ -461,13 +511,13 @@ class DisplayStatesTask(ManipulationTask):
 
         # Set q_goal to a grasp state if available
         desired = list(self.task_config.feasible_grasp_goal_states())
-        feasible = [s for s in desired if s in state_configs.keys()]
-        goal_state = None
-        
-        # Select state with most "grasps" occurrences
-        goal_state = max(all_states, key=lambda s: s.count("grasps"))
-        if goal_state is None:
-            # Use last generated config
+        feasible = [s for s in desired if s in state_configs]
+
+        # Select feasible grasp state with most "grasps" occurrences.
+        # Fallback to the last generated state.
+        if feasible:
+            goal_state = max(feasible, key=lambda s: s.count("grasps"))
+        else:
             goal_state = list(state_configs.keys())[-1]
         cg.configs["q_goal"] = cg.configs[state_configs[goal_state]]
         print(f"    Selected goal state: {goal_state}")
