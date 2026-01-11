@@ -17,6 +17,11 @@ class SpacelabTaskDefaults(ManipulationConfig):
     OBJECTS_INFO = ManipulationConfig.OBJECTS
     VALID_PAIRS_INFO = ManipulationConfig.VALID_PAIRS
 
+    # Optional optimizer configuration for TransitionPlanner solving.
+    # When unset (None), TransitionPlanner uses its current defaults.
+    TRANSITION_OPTIMIZERS = None
+    TRANSITION_OPTIMIZERS_BY_EDGE = None
+
 
 class TaskConfigurations:
     """Task-specific configurations for common manipulation tasks."""
@@ -400,32 +405,19 @@ class TaskConfigurations:
         MAX_RANDOM_ATTEMPTS = 1000
         LIFT_HEIGHT = 0.15  # Lift tool 15cm from dispenser
         PATH_OPTIMIZER = "SplineGradientBased_bezier3"
-        # | Name | Description |
-        # |------|-------------|
-        # | `"RandomShortcut"` | Random shortcut optimizer - tries random shortcuts between configurations |
-        # | `"SimpleShortcut"` | Simple shortcut optimizer |
-        # | `"PartialShortcut"` | Partial shortcut optimizer - shortcuts that preserve some path structure |
-        # | `"SimpleTimeParameterization"` | Adds time parameterization to paths |
-        # | `"RSTimeParameterization"` | Reeds-Shepp time parameterization |
-
-        # **Manipulation-specific (hpp-manipulation):**
-
-        # | Name | Description |
-        # |------|-------------|
-        # | `"RandomShortcut"` | Manipulation-aware random shortcut (overrides core version) |
-        # | `"Graph-RandomShortcut"` | Graph-aware random shortcut for constraint graphs |
-        # | `"PartialShortcut"` | Manipulation-aware partial shortcut |
-        # | `"Graph-PartialShortcut"` | Graph-aware partial shortcut for constraint graphs |
-        # | `"EnforceTransitionSemantic"` | Enforces transition semantics in manipulation graphs |
-
-        # **Plugin-based (require `ps.loadPlugin()`):**
-
-        # | Name | Plugin | Description |
-        # |------|--------|-------------|
-        # | `"SplineGradientBased_bezier1"` | `spline-gradient-based.so` | Spline optimization with Bezier basis, order 1 |
-        # | `"SplineGradientBased_bezier3"` | `spline-gradient-based.so` | Spline optimization with Bezier basis, order 3 |
-        # | `"SplineGradientBased_bezier5"` | `spline-gradient-based.so` | Spline optimization with Bezier basis, order 5 |
-        # | `"TOPPRA"` | `toppra.so` | Time-optimal path parameterization |
+        # Common optimizer names (non-exhaustive):
+        # - "RandomShortcut": random shortcuts between configurations
+        # - "SimpleShortcut": simple shortcut optimizer
+        # - "PartialShortcut": shortcut optimizer preserving some structure
+        # - "SimpleTimeParameterization": adds time parameterization
+        # - "RSTimeParameterization": Reeds-Shepp time parameterization
+        # Manipulation-specific (hpp-manipulation):
+        # - "Graph-RandomShortcut": graph-aware random shortcut
+        # - "Graph-PartialShortcut": graph-aware partial shortcut
+        # - "EnforceTransitionSemantic": enforce transition semantics
+        # Plugin-based (require ps.loadPlugin()):
+        # - "SplineGradientBased_bezier{1,3,5}": spline optimizer
+        # - "TOPPRA": time-optimal path parameterization
 
         @classmethod
         def init_poses(cls):
