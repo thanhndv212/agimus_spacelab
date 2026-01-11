@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from agimus_spacelab.tasks import ManipulationTask
+from agimus_spacelab.tasks.grasp_sequence import GraspSequencePlanner
 from agimus_spacelab.visualization import visualize_constraint_graph
 
 
@@ -300,6 +301,10 @@ def _get_num_paths(task) -> int:
     if planner is None:
         return 0
 
+    stored = getattr(planner, "_stored_paths", None)
+    if isinstance(stored, list):
+        return len(stored)
+
     # CORBA backend exposes ProblemSolver via planner.ps
     ps = getattr(planner, "ps", None)
     if ps is not None and hasattr(ps, "numberPaths"):
@@ -340,6 +345,104 @@ def interactive_replay_path(task) -> None:
     input("Press Enter to continue...")
 
 
+def interactive_grasp_sequence(task, cfg) -> None:
+    """Interactively select and plan a grasp sequence."""
+    print("\n=== Interactive Grasp Sequence Planning ===")
+    
+    # Get all possible grasps from config
+    all_grasps = []
+    valid_pairs = getattr(cfg, "VALID_PAIRS", {})
+    for gripper, handles in valid_pairs.items():
+        for handle in handles:
+            all_grasps.append((gripper, handle))
+    
+    if not all_grasps:
+        print("No valid grasps available in config.")
+        input("Press Enter to continue...")
+        return
+    
+    # Format for display
+    grasp_options = [
+        f"{gripper} → {handle}"
+        for gripper, handle in all_grasps
+    ] + ["[Done - Start Planning]"]
+    
+    selected_sequence = []
+    
+    while True:
+        # Show current sequence
+        if selected_sequence:
+            print("\nCurrent sequence:")
+            for i, (g, h) in enumerate(selected_sequence, 1):
+                print(f"  {i}. {g} → {h}")
+        else:
+            print("\nSequence is empty. Select grasps to add.")
+        
+        # Select next grasp
+        selected = interactive_menu(
+            "Select next grasp to add (or Done to plan):",
+            grasp_options,
+            multi_select=False,
+        )
+        
+        if not selected:
+            break
+        
+        if selected[0] >= len(all_grasps):  # Done button
+            break
+        
+        selected_sequence.append(all_grasps[selected[0]])
+    
+    if not selected_sequence:
+        print("No grasps selected.")
+        input("Press Enter to continue...")
+        return
+    
+    print(f"\nPlanning sequence of {len(selected_sequence)} grasps...")
+    
+    try:
+        # Create GraspSequencePlanner
+        planner = GraspSequencePlanner(
+            graph_builder=task.graph_builder,
+            config_gen=task.config_gen,
+            planner=task.planner,
+            task_config=task.task_config,
+            backend=task.backend,
+            pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
+        )
+        
+        # Get initial config
+        q_init = task.config_gen.configs.get("q_init")
+        if q_init is None:
+            print("Error: q_init not found")
+            input("Press Enter to continue...")
+            return
+        
+        # Plan sequence
+        result = planner.plan_sequence(
+            grasp_sequence=selected_sequence,
+            q_init=q_init,
+            verbose=True,
+        )
+        
+        if result["success"]:
+            print("\n" + "=" * 70)
+            print("Sequence planning succeeded!")
+            print(planner.get_phase_summary())
+            print("\nReplay sequence? (y/n)")
+            if input("> ").lower() == "y":
+                planner.replay_sequence()
+        else:
+            print("Sequence planning failed.")
+    
+    except Exception as e:
+        print(f"\nSequence planning error: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    input("\nPress Enter to continue...")
+
+
 def interactive_main_menu(task, configs: Dict[str, List[float]]):
     """Interactive main menu with multiple options."""
     while True:
@@ -347,6 +450,8 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
             "Browse configurations",
             "Visualize constraint graph",
             "Solve planning problem",
+            "Solve with TransitionPlanner",
+            "Plan grasp sequence (incremental)",
             "Replay path",
             "[Exit]",
         ]
@@ -357,7 +462,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
             multi_select=False,
         )
 
-        if not selected or selected[0] == 4:  # Exit
+        if not selected or selected[0] == 6:  # Exit
             break
 
         if selected[0] == 0:  # Browse configurations
@@ -381,6 +486,7 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
                     solve=True,
                     preferred_configs=[],
                     max_iterations=5000,
+                    solve_mode="manipulation-planner",
                 )
                 if result.get("solved", False):
                     print("Planning succeeded!")
@@ -390,7 +496,24 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
                 print(f"Planning error: {e}")
             input("Press Enter to continue...")
 
-        elif selected[0] == 3:  # Replay path
+        elif selected[0] == 3:  # Solve with TransitionPlanner
+            print("\n=== Solve with TransitionPlanner ===")
+            try:
+                task.run(
+                    visualize=True,
+                    solve=True,
+                    preferred_configs=[],
+                    max_iterations=5000,
+                    solve_mode="transition-planner",
+                )
+            except Exception as e:
+                print(f"Planning error: {e}")
+            input("Press Enter to continue...")
+
+        elif selected[0] == 4:  # Plan grasp sequence
+            interactive_grasp_sequence(task, task.task_config)
+
+        elif selected[0] == 5:  # Replay path
             interactive_replay_path(task)
 
 
@@ -509,9 +632,6 @@ class DisplayStatesTask(ManipulationTask):
             except Exception as e:
                 print(f"    ⚠ Could not project onto '{state}': {e}")
 
-        # Set q_goal to a grasp state if available
-        desired = list(self.task_config.feasible_grasp_goal_states())
-        feasible = [s for s in desired if s in state_configs.keys()]
         goal_state = None
 
         # Select state with most "grasps" occurrences
@@ -548,6 +668,13 @@ def main(argv: list[str] | None = None) -> int:
         "--solve",
         action="store_true",
         help="Attempt to solve planning problem",
+    )
+    parser.add_argument(
+        "--solve-mode",
+        type=str,
+        default="manipulation-planner",
+        choices=["manipulation-planner", "transition-planner"],
+        help="Planning algorithm to use when --solve is set",
     )
     parser.add_argument(
         "--goal",
@@ -609,6 +736,18 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Visualize constraint graph as PNG. Optionally specify output "
             "path (default: /tmp/constraint_graph). Requires matplotlib."
+        ),
+    )
+    parser.add_argument(
+        "--grasp-sequence",
+        type=str,
+        metavar="SEQUENCE",
+        help=(
+            "Plan a sequence of grasps using incremental phase graphs. "
+            "Format: GRIPPER1:HANDLE1,GRIPPER2:HANDLE2,... "
+            "Example: 'spacelab/g_ur10_tool:frame_gripper/h_FG_tool,"
+            "spacelab/g_vispa:panel/h_panel'. Uses TransitionPlanner for "
+            "each phase with minimal graph regeneration."
         ),
     )
 
@@ -677,11 +816,78 @@ def main(argv: list[str] | None = None) -> int:
         freeze_joint_substrings=freeze_joint_substrings,
     )
 
+    # Handle --grasp-sequence mode
+    if args.grasp_sequence:
+        print("\n=== Grasp Sequence Planning Mode ===")
+        
+        # Parse sequence: "gripper1:handle1,gripper2:handle2,..."
+        grasp_sequence = []
+        for pair_str in args.grasp_sequence.split(","):
+            pair_str = pair_str.strip()
+            if ":" not in pair_str:
+                print(
+                    f"Warning: Invalid pair format '{pair_str}', "
+                    "expected 'GRIPPER:HANDLE'"
+                )
+                continue
+            gripper, handle = pair_str.split(":", 1)
+            grasp_sequence.append((gripper.strip(), handle.strip()))
+        
+        if not grasp_sequence:
+            print("Error: No valid grasps in sequence")
+            return 1
+        
+        print(f"Sequence: {grasp_sequence}")
+        
+        # Run task setup to get q_init
+        result = task.run(
+            visualize=not args.no_viz,
+            solve=False,
+            preferred_configs=[],
+            max_iterations=5000,
+            solve_mode=args.solve_mode,
+        )
+        q_init = result["configs"].get("q_init")
+        if q_init is None:
+            print("Error: Failed to generate q_init")
+            return 1
+        
+        # Create and run sequence planner
+        try:
+            seq_planner = GraspSequencePlanner(
+                graph_builder=task.graph_builder,
+                config_gen=task.config_gen,
+                planner=task.planner,
+                task_config=task.task_config,
+                backend=task.backend,
+                pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
+            )
+            
+            seq_result = seq_planner.plan_sequence(
+                grasp_sequence=grasp_sequence,
+                q_init=q_init,
+                verbose=True,
+            )
+            
+            if seq_result["success"]:
+                print(seq_planner.get_phase_summary())
+                return 0
+            else:
+                print("Sequence planning failed")
+                return 1
+        
+        except Exception as e:
+            print(f"Sequence planning error: {e}")
+            import traceback
+            traceback.print_exc()
+            return 1
+
     result = task.run(
         visualize=not args.no_viz,
         solve=args.solve,
         preferred_configs=[],
         max_iterations=5000,
+        solve_mode=args.solve_mode,
     )
 
     configs = result.get("configs", {})
