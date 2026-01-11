@@ -348,27 +348,27 @@ def interactive_replay_path(task) -> None:
 def interactive_grasp_sequence(task, cfg) -> None:
     """Interactively select and plan a grasp sequence."""
     print("\n=== Interactive Grasp Sequence Planning ===")
-    
+
     # Get all possible grasps from config
     all_grasps = []
     valid_pairs = getattr(cfg, "VALID_PAIRS", {})
     for gripper, handles in valid_pairs.items():
         for handle in handles:
             all_grasps.append((gripper, handle))
-    
+
     if not all_grasps:
         print("No valid grasps available in config.")
         input("Press Enter to continue...")
         return
-    
+
     # Format for display
     grasp_options = [
         f"{gripper} → {handle}"
         for gripper, handle in all_grasps
     ] + ["[Done - Start Planning]"]
-    
+
     selected_sequence = []
-    
+
     while True:
         # Show current sequence
         if selected_sequence:
@@ -377,29 +377,29 @@ def interactive_grasp_sequence(task, cfg) -> None:
                 print(f"  {i}. {g} → {h}")
         else:
             print("\nSequence is empty. Select grasps to add.")
-        
+
         # Select next grasp
         selected = interactive_menu(
             "Select next grasp to add (or Done to plan):",
             grasp_options,
             multi_select=False,
         )
-        
+
         if not selected:
             break
-        
+
         if selected[0] >= len(all_grasps):  # Done button
             break
-        
+
         selected_sequence.append(all_grasps[selected[0]])
-    
+
     if not selected_sequence:
         print("No grasps selected.")
         input("Press Enter to continue...")
         return
-    
+
     print(f"\nPlanning sequence of {len(selected_sequence)} grasps...")
-    
+
     try:
         # Create GraspSequencePlanner
         planner = GraspSequencePlanner(
@@ -409,22 +409,23 @@ def interactive_grasp_sequence(task, cfg) -> None:
             task_config=task.task_config,
             backend=task.backend,
             pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
+            graph_constraints=getattr(task, "_graph_constraints", None),
         )
-        
+
         # Get initial config
         q_init = task.config_gen.configs.get("q_init")
         if q_init is None:
             print("Error: q_init not found")
             input("Press Enter to continue...")
             return
-        
+
         # Plan sequence
         result = planner.plan_sequence(
             grasp_sequence=selected_sequence,
             q_init=q_init,
             verbose=True,
         )
-        
+
         if result["success"]:
             print("\n" + "=" * 70)
             print("Sequence planning succeeded!")
@@ -434,12 +435,12 @@ def interactive_grasp_sequence(task, cfg) -> None:
                 planner.replay_sequence()
         else:
             print("Sequence planning failed.")
-    
+
     except Exception as e:
         print(f"\nSequence planning error: {e}")
         import traceback
         traceback.print_exc()
-    
+
     input("\nPress Enter to continue...")
 
 
@@ -810,16 +811,20 @@ def main(argv: list[str] | None = None) -> int:
 
     task = DisplayStatesTask(backend=args.backend)
     task.task_config = cfg  # Use filtered config
-    task.setup(
-        validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
-        projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
-        freeze_joint_substrings=freeze_joint_substrings,
-    )
 
     # Handle --grasp-sequence mode
     if args.grasp_sequence:
         print("\n=== Grasp Sequence Planning Mode ===")
-        
+
+        # Setup without creating full graph (skip_graph=True)
+        # GraspSequencePlanner will build minimal phase graphs
+        task.setup(
+            validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
+            projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
+            freeze_joint_substrings=freeze_joint_substrings,
+            skip_graph=True,
+        )
+
         # Parse sequence: "gripper1:handle1,gripper2:handle2,..."
         grasp_sequence = []
         for pair_str in args.grasp_sequence.split(","):
@@ -832,26 +837,28 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             gripper, handle = pair_str.split(":", 1)
             grasp_sequence.append((gripper.strip(), handle.strip()))
-        
+
         if not grasp_sequence:
             print("Error: No valid grasps in sequence")
             return 1
-        
+
         print(f"Sequence: {grasp_sequence}")
-        
-        # Run task setup to get q_init
-        result = task.run(
-            visualize=not args.no_viz,
-            solve=False,
-            preferred_configs=[],
-            max_iterations=5000,
-            solve_mode=args.solve_mode,
-        )
-        q_init = result["configs"].get("q_init")
-        if q_init is None:
-            print("Error: Failed to generate q_init")
+
+        # Get q_init from task (no full graph needed)
+        q_init = task.q_init
+        if not q_init:
+            print("Error: Failed to build q_init")
             return 1
-        
+
+        # Optional visualization
+        if not args.no_viz:
+            print("\nStarting visualization...")
+            try:
+                task.planner.visualize(q_init)
+                print("   ✓ Initial configuration displayed")
+            except Exception as e:
+                print(f"   ⚠ Visualization failed: {e}")
+
         # Create and run sequence planner
         try:
             seq_planner = GraspSequencePlanner(
@@ -861,26 +868,35 @@ def main(argv: list[str] | None = None) -> int:
                 task_config=task.task_config,
                 backend=task.backend,
                 pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
+                graph_constraints=getattr(task, "_graph_constraints", None),
             )
-            
+
             seq_result = seq_planner.plan_sequence(
                 grasp_sequence=grasp_sequence,
                 q_init=q_init,
                 verbose=True,
             )
-            
+
             if seq_result["success"]:
                 print(seq_planner.get_phase_summary())
                 return 0
             else:
                 print("Sequence planning failed")
                 return 1
-        
+
         except Exception as e:
             print(f"Sequence planning error: {e}")
             import traceback
             traceback.print_exc()
             return 1
+    else:
+        # Normal mode: setup with full graph creation
+        task.setup(
+            validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
+            projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
+            freeze_joint_substrings=freeze_joint_substrings,
+            skip_graph=False,
+        )
 
     result = task.run(
         visualize=not args.no_viz,
