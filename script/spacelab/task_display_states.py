@@ -440,6 +440,69 @@ def interactive_grasp_sequence(task, cfg) -> None:
         print(f"\nSequence planning error: {e}")
         import traceback
         traceback.print_exc()
+        
+        # Check if sequence can be resumed
+        if hasattr(planner, 'get_resumable_state'):
+            resume_state = planner.get_resumable_state()
+            if resume_state:
+                print("\n" + "=" * 70)
+                print("Planning Failed - Partial Progress Saved")
+                print("=" * 70)
+                print(f"Failed at: Phase {resume_state['phase_idx'] + 1}, "
+                      f"Edge {resume_state['edge_idx'] + 1}")
+                print(f"Completed phases: {resume_state['completed_phases']}")
+                print(f"Completed edges in current phase: "
+                      f"{resume_state['completed_edges_in_phase']} of "
+                      f"{resume_state['total_edges_in_phase']}")
+                print(f"Error: {resume_state['error']}")
+                
+                # Show partial results summary
+                print(planner.get_phase_summary())
+                
+                # Offer resume options
+                print("\n" + "=" * 70)
+                print("Resume Options:")
+                print("=" * 70)
+                print("[R] Replay completed paths")
+                print("[1] Retry from failed edge")
+                print("[2] Retry from start of failed phase")
+                print("[3] Retry with increased timeout (2x)")
+                print("[Q] Quit to menu")
+                
+                choice = input("\nSelect option: ").strip().upper()
+                
+                if choice == "R":
+                    print("\nReplaying completed paths...")
+                    planner.replay_sequence()
+                elif choice in ["1", "2", "3"]:
+                    retry_edge = -1 if choice == "1" else 0
+                    timeout_mult = 2.0 if choice == "3" else 1.0
+                    
+                    print(f"\nRetrying {'failed edge' if choice == '1' else 'failed phase'}...")
+                    if choice == "3":
+                        print("  Using 2x timeout")
+                    
+                    try:
+                        result = planner.resume_sequence(
+                            retry_from_edge=retry_edge,
+                            timeout_per_edge=60.0 * timeout_mult if choice == "3" else None,
+                            verbose=True,
+                        )
+                        
+                        if result["success"]:
+                            print("\n" + "=" * 70)
+                            print("Resume succeeded!")
+                            print(planner.get_phase_summary())
+                            print("\nReplay full sequence? (y/n)")
+                            if input("> ").lower() == "y":
+                                planner.replay_sequence()
+                    except Exception as e2:
+                        print(f"\nResume failed: {e2}")
+                        # Can retry again from the new failure point
+                        resume_state2 = planner.get_resumable_state()
+                        if resume_state2:
+                            print("\nSequence still has partial progress.")
+                            print("Return to this menu to retry again.")
 
     input("\nPress Enter to continue...")
 
