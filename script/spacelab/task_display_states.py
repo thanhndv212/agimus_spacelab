@@ -440,7 +440,7 @@ def interactive_grasp_sequence(task, cfg) -> None:
         print(f"\nSequence planning error: {e}")
         import traceback
         traceback.print_exc()
-        
+
         # Check if sequence can be resumed
         if hasattr(planner, 'get_resumable_state'):
             resume_state = planner.get_resumable_state()
@@ -455,17 +455,17 @@ def interactive_grasp_sequence(task, cfg) -> None:
                       f"{resume_state['completed_edges_in_phase']} of "
                       f"{resume_state['total_edges_in_phase']}")
                 print(f"Error: {resume_state['error']}")
-                
+
                 # Show partial results summary
                 print(planner.get_phase_summary())
-                
+
                 # Offer resume options in a loop
                 while True:
                     resume_state = planner.get_resumable_state()
                     if not resume_state:
                         # Planning succeeded or no more resumable state
                         break
-                    
+
                     print("\n" + "=" * 70)
                     print("Resume Options:")
                     print("=" * 70)
@@ -473,23 +473,55 @@ def interactive_grasp_sequence(task, cfg) -> None:
                     print("[1] Retry from failed edge")
                     print("[2] Retry from start of failed phase")
                     print("[3] Retry with increased timeout (2x)")
+                    print("[4] Retry with increased max iterations")
                     print("[Q] Quit to menu")
-                    
+
                     choice = input("\nSelect option: ").strip().upper()
-                    
+
                     if choice == "Q":
                         break
                     elif choice == "R":
                         print("\nReplaying completed paths...")
                         planner.replay_sequence()
-                    elif choice in ["1", "2", "3"]:
+                    elif choice in ["1", "2", "3", "4"]:
                         retry_edge = -1 if choice == "1" else 0
                         timeout_mult = 2.0 if choice == "3" else 1.0
-                        
-                        print(f"\nRetrying {'failed edge' if choice == '1' else 'failed phase'}...")
+
+                        edge_or_phase = (
+                            "failed edge" if choice == "1" else "failed phase"
+                        )
+                        print(f"\nRetrying {edge_or_phase}...")
+
+                        timeout = None
+                        max_iters = None
+
                         if choice == "3":
                             print("  Using 2x timeout")
-                        
+                            timeout = 60.0 * timeout_mult
+                        elif choice == "4":
+                            print("\nIncrease max iterations:")
+                            print("[1] 2x (double current)")
+                            print("[2] Custom value")
+                            iter_choice = input("Select: ").strip()
+
+                            if iter_choice == "1":
+                                max_iters = 5000 * 2
+                                print(
+                                    f"  Using 2x max iterations: {max_iters}"
+                                )
+                            elif iter_choice == "2":
+                                try:
+                                    custom_val = input(
+                                        "Enter max iterations: "
+                                    ).strip()
+                                    max_iters = int(custom_val)
+                                    print(
+                                        f"  Using max iterations: {max_iters}"
+                                    )
+                                except ValueError:
+                                    print("  Invalid input, using default")
+                                    max_iters = None
+
                         try:
                             result = planner.resume_sequence(
                                 retry_from_edge=retry_edge,
