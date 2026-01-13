@@ -400,6 +400,73 @@ def interactive_grasp_sequence(task, cfg) -> None:
 
     print(f"\nPlanning sequence of {len(selected_sequence)} grasps...")
 
+    # Select frozen arms mode
+    frozen_mode_options = [
+        "auto - Freeze all arms except active gripper's arm",
+        "manual - Specify which arms to freeze per phase",
+        "interactive - Prompt per phase which arms to freeze",
+        "global - Use task's global locked joint constraints",
+        "none - No locked joint constraints",
+    ]
+
+    print("\nSelect locked joint constraint mode:")
+    mode_selected = interactive_menu(
+        "Choose mode:",
+        frozen_mode_options,
+        multi_select=False,
+    )
+
+    if not mode_selected:
+        print("Cancelled.")
+        input("Press Enter to continue...")
+        return
+
+    mode_map = ["auto", "manual", "interactive", "global", "none"]
+    frozen_arms_mode = mode_map[mode_selected[0]]
+    per_phase_frozen_arms = None
+
+    # Manual mode: collect per-phase specifications
+    if frozen_arms_mode == "manual":
+        per_phase_frozen_arms = {}
+        arm_keywords = ["ur10", "vispa_", "vispa2"]
+
+        for phase_idx, (gripper, handle) in enumerate(selected_sequence):
+            print(f"\nPhase {phase_idx + 1}: {gripper} → {handle}")
+            print("Select arm(s) to freeze:")
+
+            selected_arms = interactive_menu(
+                "Select arms:",
+                arm_keywords + ["[None - No Locking]"],
+                multi_select=True,
+            )
+
+            arm_count = len(arm_keywords)
+            if selected_arms and selected_arms[0] < arm_count:
+                frozen = [
+                    arm_keywords[i] for i in selected_arms if i < arm_count
+                ]
+                per_phase_frozen_arms[phase_idx] = frozen
+                print(f"  Freezing: {frozen}")
+            else:
+                print("  No locked joints for this phase")
+
+    # Define interactive arm selector callback for interactive mode
+    def interactive_arm_selector(phase_idx, gripper, arm_keywords):
+        """Callback for interactive arm selection per phase."""
+        print(f"\n  Select arms to freeze for Phase {phase_idx + 1}:")
+        print(f"  Active gripper: {gripper}")
+
+        selected = interactive_menu(
+            "Select arm(s) to freeze:",
+            arm_keywords + ["[None - No Locking]"],
+            multi_select=True,
+        )
+
+        arm_count = len(arm_keywords)
+        if selected and selected[0] < arm_count:
+            return [arm_keywords[i] for i in selected if i < arm_count]
+        return []
+
     try:
         # Create GraspSequencePlanner
         planner = GraspSequencePlanner(
@@ -412,6 +479,12 @@ def interactive_grasp_sequence(task, cfg) -> None:
             graph_constraints=getattr(task, "_graph_constraints", None),
         )
 
+        # Set interactive callback if in interactive mode
+        if frozen_arms_mode == "interactive":
+            planner.interactive_arm_selector_callback = (
+                interactive_arm_selector
+            )
+
         # Get initial config
         q_init = task.config_gen.configs.get("q_init")
         if q_init is None:
@@ -423,6 +496,8 @@ def interactive_grasp_sequence(task, cfg) -> None:
         result = planner.plan_sequence(
             grasp_sequence=selected_sequence,
             q_init=q_init,
+            frozen_arms_mode=frozen_arms_mode,
+            per_phase_frozen_arms=per_phase_frozen_arms,
             verbose=True,
         )
 
@@ -525,10 +600,13 @@ def interactive_grasp_sequence(task, cfg) -> None:
                         try:
                             result = planner.resume_sequence(
                                 retry_from_edge=retry_edge,
-                                timeout_per_edge=60.0 * timeout_mult if choice == "3" else None,
+                                timeout_per_edge=timeout,
+                                max_iterations_per_edge=max_iters,
+                                frozen_arms_mode=frozen_arms_mode,
+                                per_phase_frozen_arms=per_phase_frozen_arms,
                                 verbose=True,
                             )
-                            
+
                             if result["success"]:
                                 print("\n" + "=" * 70)
                                 print("Resume succeeded!")
