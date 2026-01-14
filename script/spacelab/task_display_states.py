@@ -547,7 +547,7 @@ def interactive_grasp_sequence(task, cfg) -> None:
                     print("[R] Replay completed paths")
                     print("[1] Retry from failed edge")
                     print("[2] Retry from start of failed phase")
-                    print("[3] Retry with increased timeout (2x)")
+                    print("[3] Retry with increased timeout")
                     print("[4] Retry with increased max iterations")
                     print("[Q] Quit to menu")
 
@@ -560,7 +560,6 @@ def interactive_grasp_sequence(task, cfg) -> None:
                         planner.replay_sequence()
                     elif choice in ["1", "2", "3", "4"]:
                         retry_edge = -1 if choice == "1" else 0
-                        timeout_mult = 2.0 if choice == "3" else 1.0
 
                         edge_or_phase = (
                             "failed edge" if choice == "1" else "failed phase"
@@ -571,8 +570,25 @@ def interactive_grasp_sequence(task, cfg) -> None:
                         max_iters = None
 
                         if choice == "3":
-                            print("  Using 2x timeout")
-                            timeout = 60.0 * timeout_mult
+                            print("\nIncrease timeout:")
+                            print("[1] 2x (double current)")
+                            print("[2] Custom value")
+                            timeout_choice = input("Select: ").strip()
+
+                            if timeout_choice == "1":
+                                timeout = 60.0 * 2
+                                print(f"  Using 2x timeout: {timeout}s")
+                            elif timeout_choice == "2":
+                                try:
+                                    custom_val = input(
+                                        "Enter timeout (seconds): "
+                                    ).strip()
+                                    timeout = float(custom_val)
+                                    print(f"  Using timeout: {timeout}s")
+                                except ValueError:
+                                    print("  Invalid input, using default")
+                                    timeout = None
+                            
                         elif choice == "4":
                             print("\nIncrease max iterations:")
                             print("[1] 2x (double current)")
