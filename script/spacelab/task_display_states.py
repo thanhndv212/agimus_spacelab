@@ -631,6 +631,13 @@ def interactive_grasp_sequence(task, cfg) -> None:
                                 print("\nYou can retry again with different options.")
                             else:
                                 print("\nNo resumable state available.")
+                                print(planner.get_phase_summary())
+                                
+                                # Offer replay before exiting
+                                if planner.phase_results:
+                                    print("\nReplay completed paths? (y/n)")
+                                    if input("> ").lower() == "y":
+                                        planner.replay_sequence()
                                 break
 
     input("\nPress Enter to continue...")
