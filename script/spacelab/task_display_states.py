@@ -423,7 +423,7 @@ def interactive_replay_path(task, cfg, freeze_joint_substrings) -> None:
 def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
     """Interactively select and plan a grasp sequence."""
     print("\n=== Interactive Grasp Sequence Planning ===")
-    
+
     # Ensure minimal setup (no full graph needed)
     if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
         input("Press Enter to continue...")
@@ -443,11 +443,15 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
 
     # Format for display
     grasp_options = [
-        f"{gripper} → {handle}"
-        for gripper, handle in all_grasps
-    ] + ["[Done - Start Planning]"]
+        f"{gripper} → {handle}" for gripper, handle in all_grasps
+    ] + [
+        "[Done - Start Planning]",
+        "[Done - Start Planning (non stop)]",
+    ]
 
     selected_sequence = []
+    non_stop = False
+    done_non_stop_idx = len(all_grasps) + 1
 
     while True:
         # Show current sequence
@@ -468,7 +472,10 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
         if not selected:
             break
 
-        if selected[0] >= len(all_grasps):  # Done button
+        if selected[0] == len(all_grasps):  # Done - Start Planning
+            break
+        if selected[0] == done_non_stop_idx:
+            non_stop = True
             break
 
         selected_sequence.append(all_grasps[selected[0]])
@@ -479,6 +486,11 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
         return
 
     print(f"\nPlanning sequence of {len(selected_sequence)} grasps...")
+    if non_stop:
+        print(
+            "Non stop mode enabled: will automatically resume on failure "
+            "(Ctrl+C to stop)."
+        )
 
     # Select frozen arms mode
     frozen_mode_options = [
@@ -569,11 +581,11 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
         q_init = None
         if hasattr(task, 'config_gen') and task.config_gen is not None:
             q_init = task.config_gen.configs.get("q_init")
-        
+
         # Fallback: try task.q_init property
         if q_init is None:
             q_init = getattr(task, 'q_init', None)
-        
+
         if q_init is None:
             print("Error: q_init not available. Try loading full graph first.")
             input("Press Enter to continue...")
@@ -588,7 +600,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             verbose=True,
         )
 
-        if result["success"]:
+        if result.get("success"):
             print("\n" + "=" * 70)
             print("Sequence planning succeeded!")
             print(planner.get_phase_summary())
@@ -597,6 +609,36 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                 planner.replay_sequence()
         else:
             print("Sequence planning failed.")
+            if non_stop and hasattr(planner, "get_resumable_state"):
+                print("Attempting automatic resume...")
+                while True:
+                    resume_state = planner.get_resumable_state()
+                    if not resume_state:
+                        print("No resumable state available.")
+                        break
+                    try:
+                        result = planner.resume_sequence(
+                            retry_from_edge=-1,
+                            timeout_per_edge=600.0,
+                            max_iterations_per_edge=sys.maxsize,
+                            frozen_arms_mode=frozen_arms_mode,
+                            per_phase_frozen_arms=per_phase_frozen_arms,
+                            verbose=True,
+                        )
+                        if result.get("success"):
+                            print("\n" + "=" * 70)
+                            print("Resume succeeded!")
+                            print(planner.get_phase_summary())
+                            print("\nReplay full sequence? (y/n)")
+                            if input("> ").lower() == "y":
+                                planner.replay_sequence()
+                            break
+                    except KeyboardInterrupt:
+                        print("\nNon stop resume interrupted by user.")
+                        break
+                    except Exception as e2:
+                        print(f"\nAuto-resume failed: {e2}")
+                        # Keep looping; user can Ctrl+C to stop.
 
     except Exception as e:
         print(f"\nSequence planning error: {e}")
@@ -622,83 +664,124 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                 print(planner.get_phase_summary())
 
                 # Offer resume options in a loop
-                while True:
-                    resume_state = planner.get_resumable_state()
-                    if not resume_state:
-                        # Planning succeeded or no more resumable state
-                        break
-
-                    print("\n" + "=" * 70)
-                    print("Resume Options:")
-                    print("=" * 70)
-                    print("[R] Replay completed paths")
-                    print("[1] Retry from failed edge")
-                    print("[2] Retry from start of failed phase")
-                    print("[3] Retry with increased timeout")
-                    print("[4] Retry with increased max iterations")
-                    print("[Q] Quit to menu")
-
-                    choice = input("\nSelect option: ").strip().upper()
-
-                    if choice == "Q":
-                        break
-                    elif choice == "R":
-                        print("\nReplaying completed paths...")
-                        planner.replay_sequence()
-                    elif choice in ["1", "2", "3", "4"]:
-                        retry_edge = -1 if choice == "1" else 0
-
-                        edge_or_phase = (
-                            "failed edge" if choice == "1" else "failed phase"
+                if non_stop:
+                    print(
+                        "\n".join(
+                            [
+                                "=" * 70,
+                                "Non stop mode: auto-resuming with timeout=600s",
+                                "max_iterations=1000000)",
+                                "Press Ctrl+C to stop.",
+                                "=" * 70,
+                            ]
                         )
-                        print(f"\nRetrying {edge_or_phase}...")
+                    )
+                    while True:
+                        resume_state = planner.get_resumable_state()
+                        if not resume_state:
+                            break
+                        try:
+                            result = planner.resume_sequence(
+                                retry_from_edge=-1,
+                                timeout_per_edge=600.0,
+                                max_iterations_per_edge=1000000,
+                                frozen_arms_mode=frozen_arms_mode,
+                                per_phase_frozen_arms=per_phase_frozen_arms,
+                                verbose=True,
+                            )
+                            if result.get("success"):
+                                print("\n" + "=" * 70)
+                                print("Resume succeeded!")
+                                print(planner.get_phase_summary())
+                                print("\nReplay full sequence? (y/n)")
+                                if input("> ").lower() == "y":
+                                    planner.replay_sequence()
+                                break
+                        except KeyboardInterrupt:
+                            print("\nNon stop resume interrupted by user.")
+                            break
+                        except Exception as e2:
+                            print(f"\nAuto-resume failed: {e2}")
+                            # Keep looping; user can Ctrl+C to stop.
+                else:
+                    while True:
+                        resume_state = planner.get_resumable_state()
+                        if not resume_state:
+                            # Planning succeeded or no more resumable state
+                            break
 
-                        timeout = None
-                        max_iters = None
+                        print("\n" + "=" * 70)
+                        print("Resume Options:")
+                        print("=" * 70)
+                        print("[R] Replay completed paths")
+                        print("[1] Retry from failed edge")
+                        print("[2] Retry from start of failed phase")
+                        print("[3] Retry with increased timeout")
+                        print("[4] Retry with increased max iterations")
+                        print("[Q] Quit to menu")
 
-                        if choice == "3":
-                            print("\nIncrease timeout:")
-                            print("[1] 2x (double current)")
-                            print("[2] Custom value")
-                            timeout_choice = input("Select: ").strip()
+                        choice = input("\nSelect option: ").strip().upper()
 
-                            if timeout_choice == "1":
-                                timeout = 60.0 * 2
-                                print(f"  Using 2x timeout: {timeout}s")
-                            elif timeout_choice == "2":
-                                try:
-                                    custom_val = input(
-                                        "Enter timeout (seconds): "
-                                    ).strip()
-                                    timeout = float(custom_val)
-                                    print(f"  Using timeout: {timeout}s")
-                                except ValueError:
-                                    print("  Invalid input, using default")
-                                    timeout = None
-                            
-                        elif choice == "4":
-                            print("\nIncrease max iterations:")
-                            print("[1] 2x (double current)")
-                            print("[2] Custom value")
-                            iter_choice = input("Select: ").strip()
+                        if choice == "Q":
+                            break
+                        elif choice == "R":
+                            print("\nReplaying completed paths...")
+                            planner.replay_sequence()
+                        elif choice in ["1", "2", "3", "4"]:
+                            retry_edge = -1 if choice == "1" else 0
 
-                            if iter_choice == "1":
-                                max_iters = 5000 * 2
-                                print(
-                                    f"  Using 2x max iterations: {max_iters}"
-                                )
-                            elif iter_choice == "2":
-                                try:
-                                    custom_val = input(
-                                        "Enter max iterations: "
-                                    ).strip()
-                                    max_iters = int(custom_val)
+                            edge_or_phase = (
+                                "failed edge"
+                                if choice == "1"
+                                else "failed phase"
+                            )
+                            print(f"\nRetrying {edge_or_phase}...")
+
+                            timeout = None
+                            max_iters = None
+
+                            if choice == "3":
+                                print("\nIncrease timeout:")
+                                print("[1] 2x (double current)")
+                                print("[2] Custom value")
+                                timeout_choice = input("Select: ").strip()
+
+                                if timeout_choice == "1":
+                                    timeout = 60.0 * 2
+                                    print(f"  Using 2x timeout: {timeout}s")
+                                elif timeout_choice == "2":
+                                    try:
+                                        custom_val = input(
+                                            "Enter timeout (seconds): "
+                                        ).strip()
+                                        timeout = float(custom_val)
+                                        print(f"  Using timeout: {timeout}s")
+                                    except ValueError:
+                                        print("  Invalid input, using default")
+                                        timeout = None
+                            elif choice == "4":
+                                print("\nIncrease max iterations:")
+                                print("[1] 2x (double current)")
+                                print("[2] Custom value")
+                                iter_choice = input("Select: ").strip()
+
+                                if iter_choice == "1":
+                                    max_iters = 5000 * 2
                                     print(
-                                        f"  Using max iterations: {max_iters}"
+                                        f"  Using 2x max iterations: {max_iters}"
                                     )
-                                except ValueError:
-                                    print("  Invalid input, using default")
-                                    max_iters = None
+                                elif iter_choice == "2":
+                                    try:
+                                        custom_val = input(
+                                            "Enter max iterations: "
+                                        ).strip()
+                                        max_iters = int(custom_val)
+                                        print(
+                                            f"  Using max iterations: {max_iters}"
+                                        )
+                                    except ValueError:
+                                        print("  Invalid input, using default")
+                                        max_iters = None
 
                         try:
                             result = planner.resume_sequence(
@@ -735,7 +818,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                             else:
                                 print("\nNo resumable state available.")
                                 print(planner.get_phase_summary())
-                                
+
                                 # Offer replay before exiting
                                 if planner.phase_results:
                                     print("\nReplay completed paths? (y/n)")
