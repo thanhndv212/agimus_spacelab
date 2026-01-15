@@ -295,6 +295,76 @@ def interactive_visualize_configs(task, configs: Dict[str, List[float]]):
         input("Press Enter to continue...")
 
 
+def ensure_task_ready(
+    task, cfg, freeze_joint_substrings, full_graph=True
+) -> bool:
+    """Ensure task is set up with appropriate level (lazy initialization).
+
+    Args:
+        task: DisplayStatesTask instance
+        cfg: Task configuration
+        freeze_joint_substrings: Joint substrings to freeze
+        full_graph: If True, create full constraint graph.
+                    If False, only do minimal setup (for grasp sequences).
+
+    Returns:
+        True if setup succeeded or was already done
+    """
+    # Check if already set up at this level
+    if hasattr(task, '_setup_level'):
+        if full_graph and task._setup_level == 'full':
+            return True
+        if not full_graph and task._setup_level in ['minimal', 'full']:
+            return True
+
+    print("\n=== Initializing Task ===")
+    if full_graph:
+        print("Creating full constraint graph (this may take a moment)...")
+    else:
+        print("Minimal setup (scene + q_init, no graph)...")
+
+    try:
+        task.setup(
+            validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
+            projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
+            freeze_joint_substrings=freeze_joint_substrings,
+            skip_graph=not full_graph,
+        )
+        task._setup_level = 'full' if full_graph else 'minimal'
+        
+        # Verify critical components are initialized
+        if not hasattr(task, 'planner') or task.planner is None:
+            raise RuntimeError("Planner not initialized")
+        if not hasattr(task, 'graph_builder') or task.graph_builder is None:
+            raise RuntimeError("GraphBuilder not initialized")
+        
+        # config_gen might be None for minimal setup, that's ok
+        print("✓ Task initialized")
+        return True
+    except Exception as e:
+        print(f"✗ Setup failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def get_graph_status(task) -> str:
+    """Get human-readable graph status for menu display."""
+    if not hasattr(task, '_setup_level'):
+        return "Not loaded"
+    
+    if task._setup_level == 'minimal':
+        return "Minimal (no graph)"
+    
+    # Full graph loaded - count states/edges
+    try:
+        states = task.graph_builder.get_states()
+        edges = task.graph_builder.get_edges()
+        return f"{len(states)} states, {len(edges)} edges"
+    except Exception:
+        return "Loaded"
+
+
 def _get_num_paths(task) -> int:
     """Best-effort number of available stored paths for replay."""
     planner = getattr(task, "planner", None)
@@ -318,8 +388,13 @@ def _get_num_paths(task) -> int:
     return 1 if path is not None else 0
 
 
-def interactive_replay_path(task) -> None:
+def interactive_replay_path(task, cfg, freeze_joint_substrings) -> None:
     """Interactively select a path id and replay it."""
+    # Ensure minimal setup for visualization
+    if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
+        input("Press Enter to continue...")
+        return
+    
     num_paths = _get_num_paths(task)
     if num_paths <= 0:
         print("No paths available to replay (run Solve first).")
@@ -345,9 +420,14 @@ def interactive_replay_path(task) -> None:
     input("Press Enter to continue...")
 
 
-def interactive_grasp_sequence(task, cfg) -> None:
+def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
     """Interactively select and plan a grasp sequence."""
     print("\n=== Interactive Grasp Sequence Planning ===")
+    
+    # Ensure minimal setup (no full graph needed)
+    if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
+        input("Press Enter to continue...")
+        return
 
     # Get all possible grasps from config
     all_grasps = []
@@ -486,9 +566,16 @@ def interactive_grasp_sequence(task, cfg) -> None:
             )
 
         # Get initial config
-        q_init = task.config_gen.configs.get("q_init")
+        q_init = None
+        if hasattr(task, 'config_gen') and task.config_gen is not None:
+            q_init = task.config_gen.configs.get("q_init")
+        
+        # Fallback: try task.q_init property
         if q_init is None:
-            print("Error: q_init not found")
+            q_init = getattr(task, 'q_init', None)
+        
+        if q_init is None:
+            print("Error: q_init not available. Try loading full graph first.")
             input("Press Enter to continue...")
             return
 
@@ -659,10 +746,16 @@ def interactive_grasp_sequence(task, cfg) -> None:
     input("\nPress Enter to continue...")
 
 
-def interactive_main_menu(task, configs: Dict[str, List[float]]):
-    """Interactive main menu with multiple options."""
+def interactive_main_menu(
+    task, cfg, freeze_joint_substrings, configs: Dict[str, List[float]]
+):
+    """Interactive main menu with multiple options (lazy initialization)."""
     while True:
+        # Show graph status in menu
+        graph_status = get_graph_status(task)
+        
         options = [
+            "Load full graph (required for configs/solving)",
             "Browse configurations",
             "Visualize constraint graph",
             "Solve planning problem",
@@ -673,18 +766,59 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
         ]
 
         selected = interactive_menu(
-            "Select action:",
+            f"Select action: [Graph: {graph_status}]",
             options,
             multi_select=False,
         )
 
-        if not selected or selected[0] == 6:  # Exit
+        if not selected or selected[0] == 7:  # Exit
             break
 
-        if selected[0] == 0:  # Browse configurations
+        if selected[0] == 0:  # Load full graph
+            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+                input("Press Enter to continue...")
+                continue
+            
+            # Generate configurations after graph is loaded
+            if not configs:
+                print("\n=== Generating Configurations ===")
+                try:
+                    q_init = task.q_init
+                    if q_init:
+                        configs.update(task.generate_configurations(q_init))
+                        print(f"✓ Generated {len(configs)} configurations")
+                    else:
+                        print("✗ Failed to get q_init")
+                except Exception as e:
+                    print(f"✗ Configuration generation failed: {e}")
+            else:
+                print(f"Graph already loaded with {len(configs)} configurations")
+            input("Press Enter to continue...")
+
+        elif selected[0] == 1:  # Browse configurations
+            # Ensure full graph and configs are loaded
+            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+                input("Press Enter to continue...")
+                continue
+            
+            if not configs:
+                print("Generating configurations...")
+                try:
+                    q_init = task.q_init
+                    if q_init:
+                        configs.update(task.generate_configurations(q_init))
+                except Exception as e:
+                    print(f"Failed to generate configurations: {e}")
+                    input("Press Enter to continue...")
+                    continue
             interactive_visualize_configs(task, configs)
 
-        elif selected[0] == 1:  # Visualize constraint graph
+        elif selected[0] == 2:  # Visualize constraint graph
+            # Ensure full graph is loaded
+            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+                input("Press Enter to continue...")
+                continue
+            
             print("\n=== Constraint Graph Visualization ===")
             output_path = "/tmp/constraint_graph"
             visualize_constraint_graph(
@@ -694,7 +828,23 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
             )
             input("Press Enter to continue...")
 
-        elif selected[0] == 2:  # Solve planning problem
+        elif selected[0] == 3:  # Solve planning problem
+            # Ensure full graph and configs are loaded
+            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+                input("Press Enter to continue...")
+                continue
+            
+            if not configs:
+                print("Generating configurations...")
+                try:
+                    q_init = task.q_init
+                    if q_init:
+                        configs.update(task.generate_configurations(q_init))
+                except Exception as e:
+                    print(f"Failed to generate configurations: {e}")
+                    input("Press Enter to continue...")
+                    continue
+            
             print("\n=== Solve Planning Problem ===")
             try:
                 result = task.run(
@@ -712,7 +862,23 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
                 print(f"Planning error: {e}")
             input("Press Enter to continue...")
 
-        elif selected[0] == 3:  # Solve with TransitionPlanner
+        elif selected[0] == 4:  # Solve with TransitionPlanner
+            # Ensure full graph and configs are loaded
+            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+                input("Press Enter to continue...")
+                continue
+            
+            if not configs:
+                print("Generating configurations...")
+                try:
+                    q_init = task.q_init
+                    if q_init:
+                        configs.update(task.generate_configurations(q_init))
+                except Exception as e:
+                    print(f"Failed to generate configurations: {e}")
+                    input("Press Enter to continue...")
+                    continue
+            
             print("\n=== Solve with TransitionPlanner ===")
             try:
                 task.run(
@@ -726,11 +892,11 @@ def interactive_main_menu(task, configs: Dict[str, List[float]]):
                 print(f"Planning error: {e}")
             input("Press Enter to continue...")
 
-        elif selected[0] == 4:  # Plan grasp sequence
-            interactive_grasp_sequence(task, task.task_config)
+        elif selected[0] == 5:  # Plan grasp sequence
+            interactive_grasp_sequence(task, cfg, freeze_joint_substrings)
 
-        elif selected[0] == 5:  # Replay path
-            interactive_replay_path(task)
+        elif selected[0] == 6:  # Replay path
+            interactive_replay_path(task, cfg, freeze_joint_substrings)
 
 
 class DisplayStatesTask(ManipulationTask):
@@ -1027,6 +1193,15 @@ def main(argv: list[str] | None = None) -> int:
     task = DisplayStatesTask(backend=args.backend)
     task.task_config = cfg  # Use filtered config
 
+    # Interactive mode: show menu immediately without setup
+    # Setup will be done on-demand when user selects an action
+    if args.interactive:
+        print("\n=== Interactive Mode ===")
+        print("Graph will be loaded on-demand (faster startup)")
+        configs = {}  # Empty initially, will be populated when graph loads
+        interactive_main_menu(task, cfg, freeze_joint_substrings, configs)
+        return 0
+
     # Handle --grasp-sequence mode
     if args.grasp_sequence:
         print("\n=== Grasp Sequence Planning Mode ===")
@@ -1132,11 +1307,6 @@ def main(argv: list[str] | None = None) -> int:
             output_path=output_path,
             show_png=True,
         )
-
-    # Interactive mode: main menu with multiple options
-    if args.interactive:
-        print("\n=== Interactive Mode ===")
-        interactive_main_menu(task, configs)
 
     # Handle --show: display specific configurations
     elif args.show:
