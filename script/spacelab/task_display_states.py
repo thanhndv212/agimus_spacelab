@@ -604,9 +604,6 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             print("\n" + "=" * 70)
             print("Sequence planning succeeded!")
             print(planner.get_phase_summary())
-            print("\nReplay sequence? (y/n)")
-            if input("> ").lower() == "y":
-                planner.replay_sequence()
         else:
             print("Sequence planning failed.")
             if non_stop and hasattr(planner, "get_resumable_state"):
@@ -619,8 +616,8 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                     try:
                         result = planner.resume_sequence(
                             retry_from_edge=-1,
-                            timeout_per_edge=600.0,
-                            max_iterations_per_edge=sys.maxsize,
+                            timeout_per_edge=300.0,
+                            max_iterations_per_edge=1000000,
                             frozen_arms_mode=frozen_arms_mode,
                             per_phase_frozen_arms=per_phase_frozen_arms,
                             verbose=True,
@@ -629,9 +626,6 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                             print("\n" + "=" * 70)
                             print("Resume succeeded!")
                             print(planner.get_phase_summary())
-                            print("\nReplay full sequence? (y/n)")
-                            if input("> ").lower() == "y":
-                                planner.replay_sequence()
                             break
                     except KeyboardInterrupt:
                         print("\nNon stop resume interrupted by user.")
@@ -639,6 +633,12 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                     except Exception as e2:
                         print(f"\nAuto-resume failed: {e2}")
                         # Keep looping; user can Ctrl+C to stop.
+
+        # Offer replay after all planning/resume attempts
+        if planner.phase_results:
+            print("\nReplay completed paths? (y/n)")
+            if input("> ").lower() == "y":
+                planner.replay_sequence()
 
     except Exception as e:
         print(f"\nSequence planning error: {e}")
@@ -669,7 +669,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                         "\n".join(
                             [
                                 "=" * 70,
-                                "Non stop mode: auto-resuming with timeout=600s",
+                                "Non stop mode: auto-resuming with timeout=300s",
                                 "max_iterations=1000000)",
                                 "Press Ctrl+C to stop.",
                                 "=" * 70,
@@ -683,7 +683,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                         try:
                             result = planner.resume_sequence(
                                 retry_from_edge=-1,
-                                timeout_per_edge=600.0,
+                                timeout_per_edge=300.0,
                                 max_iterations_per_edge=1000000,
                                 frozen_arms_mode=frozen_arms_mode,
                                 per_phase_frozen_arms=per_phase_frozen_arms,
@@ -703,6 +703,12 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                         except Exception as e2:
                             print(f"\nAuto-resume failed: {e2}")
                             # Keep looping; user can Ctrl+C to stop.
+
+                    # Offer replay after all attempts in non-stop mode
+                    if planner.phase_results:
+                        print("\nReplay completed paths? (y/n)")
+                        if input("> ").lower() == "y":
+                            planner.replay_sequence()
                 else:
                     while True:
                         resume_state = planner.get_resumable_state()
@@ -797,9 +803,6 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                                 print("\n" + "=" * 70)
                                 print("Resume succeeded!")
                                 print(planner.get_phase_summary())
-                                print("\nReplay full sequence? (y/n)")
-                                if input("> ").lower() == "y":
-                                    planner.replay_sequence()
                                 # Exit the resume loop on success
                                 break
                         except Exception as e2:
@@ -818,13 +821,13 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                             else:
                                 print("\nNo resumable state available.")
                                 print(planner.get_phase_summary())
-
-                                # Offer replay before exiting
-                                if planner.phase_results:
-                                    print("\nReplay completed paths? (y/n)")
-                                    if input("> ").lower() == "y":
-                                        planner.replay_sequence()
                                 break
+
+                    # Offer consolidated replay after interactive resume loop
+                    if planner.phase_results:
+                        print("\nReplay completed paths? (y/n)")
+                        if input("> ").lower() == "y":
+                            planner.replay_sequence()
 
     input("\nPress Enter to continue...")
 
