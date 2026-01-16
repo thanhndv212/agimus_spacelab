@@ -693,9 +693,6 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                                 print("\n" + "=" * 70)
                                 print("Resume succeeded!")
                                 print(planner.get_phase_summary())
-                                print("\nReplay full sequence? (y/n)")
-                                if input("> ").lower() == "y":
-                                    planner.replay_sequence()
                                 break
                         except KeyboardInterrupt:
                             print("\nNon stop resume interrupted by user.")
