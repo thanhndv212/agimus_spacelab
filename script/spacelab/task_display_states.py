@@ -23,7 +23,10 @@ import numpy as np
 
 from agimus_spacelab.tasks import ManipulationTask
 from agimus_spacelab.tasks.grasp_sequence import GraspSequencePlanner
-from agimus_spacelab.visualization import visualize_constraint_graph
+from agimus_spacelab.visualization import (
+    visualize_constraint_graph,
+    visualize_constraint_graph_interactive,
+)
 
 
 # Add config directory
@@ -903,13 +906,29 @@ def interactive_main_menu(
                 continue
             
             print("\n=== Constraint Graph Visualization ===")
-            output_path = "/tmp/constraint_graph"
-            visualize_constraint_graph(
-                task.graph_builder,
-                output_path=output_path,
-                show_png=True,
+            mode_selection = interactive_menu(
+                "Choose visualization mode:",
+                ["Interactive window", "Static PNG", "Cancel"],
             )
-            input("Press Enter to continue...")
+            
+            if not mode_selection or mode_selection[0] == 2:  # Cancel
+                continue
+            elif mode_selection[0] == 0:  # Interactive window
+                visualizer = visualize_constraint_graph_interactive(
+                    task.graph_builder,
+                    window_size=(1200, 900),
+                    show_window=True,
+                    blocking=True,
+                )
+                print("Graph window closed.")
+            else:  # Static PNG
+                output_path = "/tmp/constraint_graph"
+                visualize_constraint_graph(
+                    task.graph_builder,
+                    output_path=output_path,
+                    show_png=True,
+                )
+                input("Press Enter to continue...")
 
         elif selected[0] == 3:  # Solve planning problem
             # Ensure full graph and configs are loaded
