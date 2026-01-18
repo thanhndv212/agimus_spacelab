@@ -314,10 +314,10 @@ def ensure_task_ready(
         True if setup succeeded or was already done
     """
     # Check if already set up at this level
-    if hasattr(task, '_setup_level'):
-        if full_graph and task._setup_level == 'full':
+    if hasattr(task, "_setup_level"):
+        if full_graph and task._setup_level == "full":
             return True
-        if not full_graph and task._setup_level in ['minimal', 'full']:
+        if not full_graph and task._setup_level in ["minimal", "full"]:
             return True
 
     print("\n=== Initializing Task ===")
@@ -333,32 +333,33 @@ def ensure_task_ready(
             freeze_joint_substrings=freeze_joint_substrings,
             skip_graph=not full_graph,
         )
-        task._setup_level = 'full' if full_graph else 'minimal'
-        
+        task._setup_level = "full" if full_graph else "minimal"
+
         # Verify critical components are initialized
-        if not hasattr(task, 'planner') or task.planner is None:
+        if not hasattr(task, "planner") or task.planner is None:
             raise RuntimeError("Planner not initialized")
-        if not hasattr(task, 'graph_builder') or task.graph_builder is None:
+        if not hasattr(task, "graph_builder") or task.graph_builder is None:
             raise RuntimeError("GraphBuilder not initialized")
-        
+
         # config_gen might be None for minimal setup, that's ok
         print("✓ Task initialized")
         return True
     except Exception as e:
         print(f"✗ Setup failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def get_graph_status(task) -> str:
     """Get human-readable graph status for menu display."""
-    if not hasattr(task, '_setup_level'):
+    if not hasattr(task, "_setup_level"):
         return "Not loaded"
-    
-    if task._setup_level == 'minimal':
+
+    if task._setup_level == "minimal":
         return "Minimal (no graph)"
-    
+
     # Full graph loaded - count states/edges
     try:
         states = task.graph_builder.get_states()
@@ -394,10 +395,12 @@ def _get_num_paths(task) -> int:
 def interactive_replay_path(task, cfg, freeze_joint_substrings) -> None:
     """Interactively select a path id and replay it."""
     # Ensure minimal setup for visualization
-    if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
+    if not ensure_task_ready(
+        task, cfg, freeze_joint_substrings, full_graph=False
+    ):
         input("Press Enter to continue...")
         return
-    
+
     num_paths = _get_num_paths(task)
     if num_paths <= 0:
         print("No paths available to replay (run Solve first).")
@@ -428,7 +431,9 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
     print("\n=== Interactive Grasp Sequence Planning ===")
 
     # Ensure minimal setup (no full graph needed)
-    if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
+    if not ensure_task_ready(
+        task, cfg, freeze_joint_substrings, full_graph=False
+    ):
         input("Press Enter to continue...")
         return
 
@@ -575,7 +580,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
         save_options,
         multi_select=False,
     )
-    
+
     if save_selected and save_selected[0] == 1:
         auto_save_dir = "/tmp/grasp_sequence_paths"
         print(f"Auto-save enabled: {auto_save_dir}")
@@ -608,12 +613,12 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
 
         # Get initial config
         q_init = None
-        if hasattr(task, 'config_gen') and task.config_gen is not None:
+        if hasattr(task, "config_gen") and task.config_gen is not None:
             q_init = task.config_gen.configs.get("q_init")
 
         # Fallback: try task.q_init property
         if q_init is None:
-            q_init = getattr(task, 'q_init', None)
+            q_init = getattr(task, "q_init", None)
 
         if q_init is None:
             print("Error: q_init not available. Try loading full graph first.")
@@ -672,21 +677,26 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
     except Exception as e:
         print(f"\nSequence planning error: {e}")
         import traceback
+
         traceback.print_exc()
 
         # Check if sequence can be resumed
-        if hasattr(planner, 'get_resumable_state'):
+        if hasattr(planner, "get_resumable_state"):
             resume_state = planner.get_resumable_state()
             if resume_state:
                 print("\n" + "=" * 70)
                 print("Planning Failed - Partial Progress Saved")
                 print("=" * 70)
-                print(f"Failed at: Phase {resume_state['phase_idx'] + 1}, "
-                      f"Edge {resume_state['edge_idx'] + 1}")
+                print(
+                    f"Failed at: Phase {resume_state['phase_idx'] + 1}, "
+                    f"Edge {resume_state['edge_idx'] + 1}"
+                )
                 print(f"Completed phases: {resume_state['completed_phases']}")
-                print(f"Completed edges in current phase: "
-                      f"{resume_state['completed_edges_in_phase']} of "
-                      f"{resume_state['total_edges_in_phase']}")
+                print(
+                    f"Completed edges in current phase: "
+                    f"{resume_state['completed_edges_in_phase']} of "
+                    f"{resume_state['total_edges_in_phase']}"
+                )
                 print(f"Error: {resume_state['error']}")
 
                 # Show partial results summary
@@ -839,11 +849,15 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                                 print("\n" + "=" * 70)
                                 print("Updated Failure Status")
                                 print("=" * 70)
-                                print(f"Failed at: Phase {resume_state_new['phase_idx'] + 1}, "
-                                      f"Edge {resume_state_new['edge_idx'] + 1}")
+                                print(
+                                    f"Failed at: Phase {resume_state_new['phase_idx'] + 1}, "
+                                    f"Edge {resume_state_new['edge_idx'] + 1}"
+                                )
                                 print(f"Error: {resume_state_new['error']}")
                                 print(planner.get_phase_summary())
-                                print("\nYou can retry again with different options.")
+                                print(
+                                    "\nYou can retry again with different options."
+                                )
                             else:
                                 print("\nNo resumable state available.")
                                 print(planner.get_phase_summary())
@@ -854,58 +868,73 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                         print("\nReplay completed paths? (y/n)")
                         if input("> ").lower() == "y":
                             planner.replay_sequence()
-        
+
         # Show saved files summary
         if auto_save_dir and planner.get_saved_path_files():
-            print(f"\n=== Saved Path Files ({len(planner.get_saved_path_files())} files) ===")
+            print(
+                f"\n=== Saved Path Files ({len(planner.get_saved_path_files())} files) ==="
+            )
             print(f"Directory: {auto_save_dir}")
             for f in planner.get_saved_path_files():
                 import os
+
                 print(f"  - {os.path.basename(f)}")
-            print(f"\n\u26a0 Note: These paths contain graph edge constraints and can only be")
-            print(f"  replayed within the same session using planner.replay_sequence().")
-            print(f"  They cannot be loaded in a new session without recreating the graph.")
+            print(
+                f"\n\u26a0 Note: These paths contain graph edge constraints and can only be"
+            )
+            print(
+                f"  replayed within the same session using planner.replay_sequence()."
+            )
+            print(
+                f"  They cannot be loaded in a new session without recreating the graph."
+            )
 
     input("\n\nPress Enter to continue...")
 
 
-def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> None:
+def interactive_load_and_replay_paths(
+    task, cfg, freeze_joint_substrings
+) -> None:
     """Load saved paths from directory and replay them."""
     print("\n=== Load and Replay Saved Paths ===")
-    
+
     # Ensure minimal setup for visualization
-    if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
+    if not ensure_task_ready(
+        task, cfg, freeze_joint_substrings, full_graph=False
+    ):
         input("Press Enter to continue...")
         return
-    
+
     # Ask for directory
     default_dir = "/tmp/grasp_sequence_paths"
     print(f"\nDefault directory: {default_dir}")
-    custom_dir = input("Enter directory path (or press Enter for default): ").strip()
-    
+    custom_dir = input(
+        "Enter directory path (or press Enter for default): "
+    ).strip()
+
     load_dir = custom_dir if custom_dir else default_dir
-    
+
     import os
     import glob
-    
+
     if not os.path.isdir(load_dir):
         print(f"Directory does not exist: {load_dir}")
         input("Press Enter to continue...")
         return
-    
+
     # List available path files (both .path and .json)
     path_files = sorted(glob.glob(os.path.join(load_dir, "phase_*.path")))
     json_files = sorted(glob.glob(os.path.join(load_dir, "phase_*.json")))
-    
+
     print(f"\nFound files:")
     print(f"  - {len(path_files)} native .path files")
     print(f"  - {len(json_files)} portable .json files")
-    
+
     if not path_files and not json_files:
         print(f"\nNo path files found in: {load_dir}")
         input("Press Enter to continue...")
         return
-    
+
     # Ask which format to load
     if path_files and json_files:
         format_options = [
@@ -918,33 +947,37 @@ def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> Non
             format_options,
             multi_select=False,
         )
-        
+
         if not format_selected or format_selected[0] == 2:
             input("Press Enter to continue...")
             return
-        
-        use_json = (format_selected[0] == 0)
+
+        use_json = format_selected[0] == 0
     elif json_files:
         use_json = True
         print("\nOnly JSON files available (loading...)")
     else:
         use_json = False
         print("\nOnly native .path files available (loading...)")
-    
+
     # Load paths
     print(f"\nLoading paths from {load_dir}...")
     indices = []
-    
+
     if use_json and hasattr(task.planner, "load_path_from_waypoints"):
         # Load JSON waypoints
         for filepath in json_files:
             try:
-                idx = task.planner.load_path_from_waypoints(filepath, add_to_problem=True)
+                idx = task.planner.load_path_from_waypoints(
+                    filepath, add_to_problem=True
+                )
                 indices.append(idx)
-                print(f"  ✓ Loaded {os.path.basename(filepath)} -> index {idx}")
+                print(
+                    f"  ✓ Loaded {os.path.basename(filepath)} -> index {idx}"
+                )
             except Exception as e:
                 print(f"  ✗ Failed to load {os.path.basename(filepath)}: {e}")
-    
+
     elif not use_json and hasattr(task.planner, "load_paths_from_directory"):
         # Load native .path files
         try:
@@ -955,13 +988,26 @@ def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> Non
             )
         except Exception as e:
             error_msg = str(e)
-            if "graph" in error_msg.lower() or "deserialize edges" in error_msg.lower():
-                print("\n⚠ Error: These paths contain constraint graph edge references.")
-                print("To load them, you need to recreate the constraint graph first.")
+            if (
+                "graph" in error_msg.lower()
+                or "deserialize edges" in error_msg.lower()
+            ):
+                print(
+                    "\n⚠ Error: These paths contain constraint graph edge references."
+                )
+                print(
+                    "To load them, you need to recreate the constraint graph first."
+                )
                 print("\nOptions:")
-                print("  1. Load paths in the same session where they were created")
-                print("  2. Use JSON waypoint files instead (select portable format)")
-                print("  3. In interactive mode: select 'Plan grasp sequence' first")
+                print(
+                    "  1. Load paths in the same session where they were created"
+                )
+                print(
+                    "  2. Use JSON waypoint files instead (select portable format)"
+                )
+                print(
+                    "  3. In interactive mode: select 'Plan grasp sequence' first"
+                )
                 print(f"\nTechnical details: {e}")
                 input("\nPress Enter to continue...")
                 return
@@ -973,31 +1019,31 @@ def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> Non
         print("Backend does not support path loading.")
         input("Press Enter to continue...")
         return
-    
+
     if not indices:
         print("No paths were loaded successfully.")
         input("Press Enter to continue...")
         return
-    
+
     print(f"\n✓ Loaded {len(indices)} paths (indices: {indices})")
-    
+
     # Offer replay
     replay_options = [
         "Replay all paths in sequence",
         "Select individual path to replay",
         "Cancel",
     ]
-    
+
     selected = interactive_menu(
         "What would you like to do?",
         replay_options,
         multi_select=False,
     )
-    
+
     if not selected or selected[0] == 2:
         input("Press Enter to continue...")
         return
-    
+
     if selected[0] == 0:  # Replay all
         print("\nReplaying all loaded paths...")
         for idx in indices:
@@ -1006,7 +1052,7 @@ def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> Non
                 task.planner.play_path(idx)
             except Exception as e:
                 print(f"    Failed: {e}")
-    
+
     elif selected[0] == 1:  # Select individual
         path_options = [f"Path {idx}" for idx in indices] + ["Cancel"]
         while True:
@@ -1015,17 +1061,17 @@ def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> Non
                 path_options,
                 multi_select=False,
             )
-            
+
             if not path_selected or path_selected[0] >= len(indices):
                 break
-            
+
             idx = indices[path_selected[0]]
             print(f"\nReplaying path {idx}...")
             try:
                 task.planner.play_path(idx)
             except Exception as e:
                 print(f"Failed: {e}")
-    
+
     input("\nPress Enter to continue...")
 
 
@@ -1036,7 +1082,7 @@ def interactive_main_menu(
     while True:
         # Show graph status in menu
         graph_status = get_graph_status(task)
-        
+
         options = [
             "Load full graph (required for configs/solving)",
             "Browse configurations",
@@ -1059,10 +1105,12 @@ def interactive_main_menu(
             break
 
         if selected[0] == 0:  # Load full graph
-            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+            if not ensure_task_ready(
+                task, cfg, freeze_joint_substrings, full_graph=True
+            ):
                 input("Press Enter to continue...")
                 continue
-            
+
             # Generate configurations after graph is loaded
             if not configs:
                 print("\n=== Generating Configurations ===")
@@ -1076,15 +1124,19 @@ def interactive_main_menu(
                 except Exception as e:
                     print(f"✗ Configuration generation failed: {e}")
             else:
-                print(f"Graph already loaded with {len(configs)} configurations")
+                print(
+                    f"Graph already loaded with {len(configs)} configurations"
+                )
             input("Press Enter to continue...")
 
         elif selected[0] == 1:  # Browse configurations
             # Ensure full graph and configs are loaded
-            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+            if not ensure_task_ready(
+                task, cfg, freeze_joint_substrings, full_graph=True
+            ):
                 input("Press Enter to continue...")
                 continue
-            
+
             if not configs:
                 print("Generating configurations...")
                 try:
@@ -1099,16 +1151,18 @@ def interactive_main_menu(
 
         elif selected[0] == 2:  # Visualize constraint graph
             # Ensure full graph is loaded
-            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+            if not ensure_task_ready(
+                task, cfg, freeze_joint_substrings, full_graph=True
+            ):
                 input("Press Enter to continue...")
                 continue
-            
+
             print("\n=== Constraint Graph Visualization ===")
             mode_selection = interactive_menu(
                 "Choose visualization mode:",
                 ["Interactive window", "Static PNG", "Cancel"],
             )
-            
+
             if not mode_selection or mode_selection[0] == 2:  # Cancel
                 continue
             elif mode_selection[0] == 0:  # Interactive window
@@ -1130,10 +1184,12 @@ def interactive_main_menu(
 
         elif selected[0] == 3:  # Solve planning problem
             # Ensure full graph and configs are loaded
-            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+            if not ensure_task_ready(
+                task, cfg, freeze_joint_substrings, full_graph=True
+            ):
                 input("Press Enter to continue...")
                 continue
-            
+
             if not configs:
                 print("Generating configurations...")
                 try:
@@ -1144,7 +1200,7 @@ def interactive_main_menu(
                     print(f"Failed to generate configurations: {e}")
                     input("Press Enter to continue...")
                     continue
-            
+
             print("\n=== Solve Planning Problem ===")
             try:
                 result = task.run(
@@ -1164,10 +1220,12 @@ def interactive_main_menu(
 
         elif selected[0] == 4:  # Solve with TransitionPlanner
             # Ensure full graph and configs are loaded
-            if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=True):
+            if not ensure_task_ready(
+                task, cfg, freeze_joint_substrings, full_graph=True
+            ):
                 input("Press Enter to continue...")
                 continue
-            
+
             if not configs:
                 print("Generating configurations...")
                 try:
@@ -1178,7 +1236,7 @@ def interactive_main_menu(
                     print(f"Failed to generate configurations: {e}")
                     input("Press Enter to continue...")
                     continue
-            
+
             print("\n=== Solve with TransitionPlanner ===")
             try:
                 task.run(
@@ -1199,11 +1257,14 @@ def interactive_main_menu(
             interactive_replay_path(task, cfg, freeze_joint_substrings)
 
         elif selected[0] == 7:  # Load & replay saved paths from files
-            interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings)
+            interactive_load_and_replay_paths(
+                task, cfg, freeze_joint_substrings
+            )
 
 
 class DisplayStatesTask(ManipulationTask):
     """Build a factory graph and project to a feasible goal state."""
+
     # VISPA arms are not used in this task; keep them fixed during planning.
     FREEZE_JOINT_SUBSTRINGS = []
 
@@ -1518,7 +1579,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.load_paths:
         print("\n=== Load and Replay Saved Paths ===")
         print(f"Loading from: {args.load_paths}")
-        
+
         # Minimal setup for visualization
         task.setup(
             validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
@@ -1526,26 +1587,26 @@ def main(argv: list[str] | None = None) -> int:
             freeze_joint_substrings=freeze_joint_substrings,
             skip_graph=True,
         )
-        
+
         import os
         import glob
-        
+
         if not os.path.isdir(args.load_paths):
             print(f"Error: Directory does not exist: {args.load_paths}")
             return 1
-        
+
         # List available path files
         pattern = os.path.join(args.load_paths, "phase_*.path")
         files = sorted(glob.glob(pattern))
-        
+
         if not files:
             print(f"No path files found matching: {pattern}")
             return 1
-        
+
         print(f"Found {len(files)} path files:")
         for f in files:
             print(f"  - {os.path.basename(f)}")
-        
+
         # Initialize visualization if not disabled
         if not args.no_viz:
             try:
@@ -1554,7 +1615,7 @@ def main(argv: list[str] | None = None) -> int:
                     task.planner.visualize(q_init)
             except Exception as e:
                 print(f"Visualization setup failed: {e}")
-        
+
         # Load and play paths
         if hasattr(task.planner, "load_paths_from_directory"):
             print("\nLoading paths...")
@@ -1566,19 +1627,32 @@ def main(argv: list[str] | None = None) -> int:
                 )
             except Exception as e:
                 error_msg = str(e)
-                if "graph" in error_msg.lower() or "deserialize edges" in error_msg.lower():
-                    print("\n⚠ Error: These paths contain constraint graph edge references.")
-                    print("They were created with TransitionPlanner which embeds graph edge constraints.")
+                if (
+                    "graph" in error_msg.lower()
+                    or "deserialize edges" in error_msg.lower()
+                ):
+                    print(
+                        "\n⚠ Error: These paths contain constraint graph edge references."
+                    )
+                    print(
+                        "They were created with TransitionPlanner which embeds graph edge constraints."
+                    )
                     print("\nTo replay these paths, you need to either:")
-                    print("  1. Replay them in the same session where they were created")
-                    print("  2. Use the GraspSequencePlanner's replay_sequence() method")
-                    print("  3. Or plan the sequence again to recreate and replay")
+                    print(
+                        "  1. Replay them in the same session where they were created"
+                    )
+                    print(
+                        "  2. Use the GraspSequencePlanner's replay_sequence() method"
+                    )
+                    print(
+                        "  3. Or plan the sequence again to recreate and replay"
+                    )
                     print(f"\nTechnical details: {e}")
                     return 1
                 else:
                     print(f"Error loading paths: {e}")
                     return 1
-            
+
             if indices:
                 print(f"\n✓ Loaded {len(indices)} paths")
                 print("Replaying all paths...")
@@ -1595,7 +1669,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("Error: Backend does not support path loading.")
             return 1
-        
+
         return 0
 
     # Interactive mode: show menu immediately without setup
@@ -1658,7 +1732,7 @@ def main(argv: list[str] | None = None) -> int:
         auto_save_dir = getattr(args, "auto_save_dir", None)
         if auto_save_dir:
             print(f"Auto-save enabled: {auto_save_dir}")
-        
+
         try:
             seq_planner = GraspSequencePlanner(
                 graph_builder=task.graph_builder,
@@ -1679,17 +1753,22 @@ def main(argv: list[str] | None = None) -> int:
 
             if seq_result["success"]:
                 print(seq_planner.get_phase_summary())
-                
+
                 # Show saved files summary
                 saved_files = seq_planner.get_saved_path_files()
                 if saved_files:
-                    print(f"\n=== Saved Path Files ({len(saved_files)} files) ===")
+                    print(
+                        f"\n=== Saved Path Files ({len(saved_files)} files) ==="
+                    )
                     print(f"Directory: {auto_save_dir}")
                     import os
+
                     for f in saved_files:
                         print(f"  - {os.path.basename(f)}")
-                    print(f"\nTo replay later, use: --load-paths {auto_save_dir}")
-                
+                    print(
+                        f"\nTo replay later, use: --load-paths {auto_save_dir}"
+                    )
+
                 return 0
             else:
                 print("Sequence planning failed")
@@ -1698,6 +1777,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             print(f"Sequence planning error: {e}")
             import traceback
+
             traceback.print_exc()
             return 1
     else:
