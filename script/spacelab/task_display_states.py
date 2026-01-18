@@ -562,6 +562,31 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             return [arm_keywords[i] for i in selected if i < arm_count]
         return []
 
+    # Ask about auto-save
+    auto_save_dir = None
+    print("\n=== Path Auto-Save Configuration ===")
+    save_options = [
+        "No auto-save",
+        "Auto-save to default directory (/tmp/grasp_sequence_paths)",
+        "Auto-save to custom directory",
+    ]
+    save_selected = interactive_menu(
+        "Save paths after each successful phase?",
+        save_options,
+        multi_select=False,
+    )
+    
+    if save_selected and save_selected[0] == 1:
+        auto_save_dir = "/tmp/grasp_sequence_paths"
+        print(f"Auto-save enabled: {auto_save_dir}")
+    elif save_selected and save_selected[0] == 2:
+        custom_dir = input("Enter directory path: ").strip()
+        if custom_dir:
+            auto_save_dir = custom_dir
+            print(f"Auto-save enabled: {auto_save_dir}")
+        else:
+            print("No directory specified, auto-save disabled")
+
     try:
         # Create GraspSequencePlanner
         planner = GraspSequencePlanner(
@@ -572,6 +597,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             backend=task.backend,
             pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
             graph_constraints=getattr(task, "_graph_constraints", None),
+            auto_save_dir=auto_save_dir,
         )
 
         # Set interactive callback if in interactive mode
@@ -828,7 +854,178 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                         print("\nReplay completed paths? (y/n)")
                         if input("> ").lower() == "y":
                             planner.replay_sequence()
+        
+        # Show saved files summary
+        if auto_save_dir and planner.get_saved_path_files():
+            print(f"\n=== Saved Path Files ({len(planner.get_saved_path_files())} files) ===")
+            print(f"Directory: {auto_save_dir}")
+            for f in planner.get_saved_path_files():
+                import os
+                print(f"  - {os.path.basename(f)}")
+            print(f"\n\u26a0 Note: These paths contain graph edge constraints and can only be")
+            print(f"  replayed within the same session using planner.replay_sequence().")
+            print(f"  They cannot be loaded in a new session without recreating the graph.")
 
+    input("\n\nPress Enter to continue...")
+
+
+def interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings) -> None:
+    """Load saved paths from directory and replay them."""
+    print("\n=== Load and Replay Saved Paths ===")
+    
+    # Ensure minimal setup for visualization
+    if not ensure_task_ready(task, cfg, freeze_joint_substrings, full_graph=False):
+        input("Press Enter to continue...")
+        return
+    
+    # Ask for directory
+    default_dir = "/tmp/grasp_sequence_paths"
+    print(f"\nDefault directory: {default_dir}")
+    custom_dir = input("Enter directory path (or press Enter for default): ").strip()
+    
+    load_dir = custom_dir if custom_dir else default_dir
+    
+    import os
+    import glob
+    
+    if not os.path.isdir(load_dir):
+        print(f"Directory does not exist: {load_dir}")
+        input("Press Enter to continue...")
+        return
+    
+    # List available path files (both .path and .json)
+    path_files = sorted(glob.glob(os.path.join(load_dir, "phase_*.path")))
+    json_files = sorted(glob.glob(os.path.join(load_dir, "phase_*.json")))
+    
+    print(f"\nFound files:")
+    print(f"  - {len(path_files)} native .path files")
+    print(f"  - {len(json_files)} portable .json files")
+    
+    if not path_files and not json_files:
+        print(f"\nNo path files found in: {load_dir}")
+        input("Press Enter to continue...")
+        return
+    
+    # Ask which format to load
+    if path_files and json_files:
+        format_options = [
+            "Load JSON waypoints (portable, works across sessions)",
+            "Load native .path files (may fail if graph not loaded)",
+            "Cancel",
+        ]
+        format_selected = interactive_menu(
+            "Select format to load:",
+            format_options,
+            multi_select=False,
+        )
+        
+        if not format_selected or format_selected[0] == 2:
+            input("Press Enter to continue...")
+            return
+        
+        use_json = (format_selected[0] == 0)
+    elif json_files:
+        use_json = True
+        print("\nOnly JSON files available (loading...)")
+    else:
+        use_json = False
+        print("\nOnly native .path files available (loading...)")
+    
+    # Load paths
+    print(f"\nLoading paths from {load_dir}...")
+    indices = []
+    
+    if use_json and hasattr(task.planner, "load_path_from_waypoints"):
+        # Load JSON waypoints
+        for filepath in json_files:
+            try:
+                idx = task.planner.load_path_from_waypoints(filepath, add_to_problem=True)
+                indices.append(idx)
+                print(f"  ✓ Loaded {os.path.basename(filepath)} -> index {idx}")
+            except Exception as e:
+                print(f"  ✗ Failed to load {os.path.basename(filepath)}: {e}")
+    
+    elif not use_json and hasattr(task.planner, "load_paths_from_directory"):
+        # Load native .path files
+        try:
+            indices = task.planner.load_paths_from_directory(
+                load_dir,
+                pattern="phase_*.path",
+                sort=True,
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "graph" in error_msg.lower() or "deserialize edges" in error_msg.lower():
+                print("\n⚠ Error: These paths contain constraint graph edge references.")
+                print("To load them, you need to recreate the constraint graph first.")
+                print("\nOptions:")
+                print("  1. Load paths in the same session where they were created")
+                print("  2. Use JSON waypoint files instead (select portable format)")
+                print("  3. In interactive mode: select 'Plan grasp sequence' first")
+                print(f"\nTechnical details: {e}")
+                input("\nPress Enter to continue...")
+                return
+            else:
+                print(f"\nError loading paths: {e}")
+                input("Press Enter to continue...")
+                return
+    else:
+        print("Backend does not support path loading.")
+        input("Press Enter to continue...")
+        return
+    
+    if not indices:
+        print("No paths were loaded successfully.")
+        input("Press Enter to continue...")
+        return
+    
+    print(f"\n✓ Loaded {len(indices)} paths (indices: {indices})")
+    
+    # Offer replay
+    replay_options = [
+        "Replay all paths in sequence",
+        "Select individual path to replay",
+        "Cancel",
+    ]
+    
+    selected = interactive_menu(
+        "What would you like to do?",
+        replay_options,
+        multi_select=False,
+    )
+    
+    if not selected or selected[0] == 2:
+        input("Press Enter to continue...")
+        return
+    
+    if selected[0] == 0:  # Replay all
+        print("\nReplaying all loaded paths...")
+        for idx in indices:
+            print(f"  Playing path {idx}...")
+            try:
+                task.planner.play_path(idx)
+            except Exception as e:
+                print(f"    Failed: {e}")
+    
+    elif selected[0] == 1:  # Select individual
+        path_options = [f"Path {idx}" for idx in indices] + ["Cancel"]
+        while True:
+            path_selected = interactive_menu(
+                "Select path to replay:",
+                path_options,
+                multi_select=False,
+            )
+            
+            if not path_selected or path_selected[0] >= len(indices):
+                break
+            
+            idx = indices[path_selected[0]]
+            print(f"\nReplaying path {idx}...")
+            try:
+                task.planner.play_path(idx)
+            except Exception as e:
+                print(f"Failed: {e}")
+    
     input("\nPress Enter to continue...")
 
 
@@ -847,7 +1044,8 @@ def interactive_main_menu(
             "Solve planning problem",
             "Solve with TransitionPlanner",
             "Plan grasp sequence (incremental)",
-            "Replay path",
+            "Replay path (from ProblemSolver)",
+            "Load & replay saved paths (from files)",
             "[Exit]",
         ]
 
@@ -857,7 +1055,7 @@ def interactive_main_menu(
             multi_select=False,
         )
 
-        if not selected or selected[0] == 7:  # Exit
+        if not selected or selected[0] == 8:  # Exit
             break
 
         if selected[0] == 0:  # Load full graph
@@ -997,8 +1195,11 @@ def interactive_main_menu(
         elif selected[0] == 5:  # Plan grasp sequence
             interactive_grasp_sequence(task, cfg, freeze_joint_substrings)
 
-        elif selected[0] == 6:  # Replay path
+        elif selected[0] == 6:  # Replay path from ProblemSolver
             interactive_replay_path(task, cfg, freeze_joint_substrings)
+
+        elif selected[0] == 7:  # Load & replay saved paths from files
+            interactive_load_and_replay_paths(task, cfg, freeze_joint_substrings)
 
 
 class DisplayStatesTask(ManipulationTask):
@@ -1234,6 +1435,24 @@ def main(argv: list[str] | None = None) -> int:
             "each phase with minimal graph regeneration."
         ),
     )
+    parser.add_argument(
+        "--auto-save-dir",
+        type=str,
+        metavar="DIR",
+        help=(
+            "Directory to auto-save paths after each successful phase. "
+            "Use with --grasp-sequence. Files are named phase_NN_edge_MM.path."
+        ),
+    )
+    parser.add_argument(
+        "--load-paths",
+        type=str,
+        metavar="DIR",
+        help=(
+            "Load and replay paths from a directory. "
+            "Looks for files matching phase_*.path pattern."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -1295,6 +1514,90 @@ def main(argv: list[str] | None = None) -> int:
     task = DisplayStatesTask(backend=args.backend)
     task.task_config = cfg  # Use filtered config
 
+    # Handle --load-paths mode: load and replay saved paths
+    if args.load_paths:
+        print("\n=== Load and Replay Saved Paths ===")
+        print(f"Loading from: {args.load_paths}")
+        
+        # Minimal setup for visualization
+        task.setup(
+            validation_step=getattr(cfg, "PATH_VALIDATION_STEP", 0.01),
+            projector_step=getattr(cfg, "PATH_PROJECTOR_STEP", 0.1),
+            freeze_joint_substrings=freeze_joint_substrings,
+            skip_graph=True,
+        )
+        
+        import os
+        import glob
+        
+        if not os.path.isdir(args.load_paths):
+            print(f"Error: Directory does not exist: {args.load_paths}")
+            return 1
+        
+        # List available path files
+        pattern = os.path.join(args.load_paths, "phase_*.path")
+        files = sorted(glob.glob(pattern))
+        
+        if not files:
+            print(f"No path files found matching: {pattern}")
+            return 1
+        
+        print(f"Found {len(files)} path files:")
+        for f in files:
+            print(f"  - {os.path.basename(f)}")
+        
+        # Initialize visualization if not disabled
+        if not args.no_viz:
+            try:
+                q_init = task.q_init
+                if q_init:
+                    task.planner.visualize(q_init)
+            except Exception as e:
+                print(f"Visualization setup failed: {e}")
+        
+        # Load and play paths
+        if hasattr(task.planner, "load_paths_from_directory"):
+            print("\nLoading paths...")
+            try:
+                indices = task.planner.load_paths_from_directory(
+                    args.load_paths,
+                    pattern="phase_*.path",
+                    sort=True,
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "graph" in error_msg.lower() or "deserialize edges" in error_msg.lower():
+                    print("\n⚠ Error: These paths contain constraint graph edge references.")
+                    print("They were created with TransitionPlanner which embeds graph edge constraints.")
+                    print("\nTo replay these paths, you need to either:")
+                    print("  1. Replay them in the same session where they were created")
+                    print("  2. Use the GraspSequencePlanner's replay_sequence() method")
+                    print("  3. Or plan the sequence again to recreate and replay")
+                    print(f"\nTechnical details: {e}")
+                    return 1
+                else:
+                    print(f"Error loading paths: {e}")
+                    return 1
+            
+            if indices:
+                print(f"\n✓ Loaded {len(indices)} paths")
+                print("Replaying all paths...")
+                for idx in indices:
+                    print(f"  Playing path {idx}...")
+                    try:
+                        task.planner.play_path(idx)
+                    except Exception as e:
+                        print(f"    Failed: {e}")
+                print("Replay complete.")
+            else:
+                print("No paths were loaded successfully.")
+                return 1
+        else:
+            print("Error: Backend does not support path loading.")
+            return 1
+        
+        return 0
+
     # Interactive mode: show menu immediately without setup
     # Setup will be done on-demand when user selects an action
     if args.interactive:
@@ -1352,6 +1655,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"   ⚠ Visualization failed: {e}")
 
         # Create and run sequence planner
+        auto_save_dir = getattr(args, "auto_save_dir", None)
+        if auto_save_dir:
+            print(f"Auto-save enabled: {auto_save_dir}")
+        
         try:
             seq_planner = GraspSequencePlanner(
                 graph_builder=task.graph_builder,
@@ -1361,6 +1668,7 @@ def main(argv: list[str] | None = None) -> int:
                 backend=task.backend,
                 pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
                 graph_constraints=getattr(task, "_graph_constraints", None),
+                auto_save_dir=auto_save_dir,
             )
 
             seq_result = seq_planner.plan_sequence(
@@ -1371,6 +1679,17 @@ def main(argv: list[str] | None = None) -> int:
 
             if seq_result["success"]:
                 print(seq_planner.get_phase_summary())
+                
+                # Show saved files summary
+                saved_files = seq_planner.get_saved_path_files()
+                if saved_files:
+                    print(f"\n=== Saved Path Files ({len(saved_files)} files) ===")
+                    print(f"Directory: {auto_save_dir}")
+                    import os
+                    for f in saved_files:
+                        print(f"  - {os.path.basename(f)}")
+                    print(f"\nTo replay later, use: --load-paths {auto_save_dir}")
+                
                 return 0
             else:
                 print("Sequence planning failed")
