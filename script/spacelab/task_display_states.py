@@ -500,6 +500,37 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             "(Ctrl+C to stop)."
         )
 
+    # Select phases to skip (optional)
+    skip_phases = set()
+    if len(selected_sequence) > 1:
+        print("\n=== Skip Phase Configuration (Optional) ===")
+        print("Skip motion planning for selected phases.")
+        print("Config generation will still execute; useful for testing.")
+        
+        skip_phase_options = [
+            f"Phase {i+1}: {gripper} → {handle}"
+            for i, (gripper, handle) in enumerate(selected_sequence)
+        ] + ["[No phases to skip]"]
+        
+        skip_selected = interactive_menu(
+            "Select phases to skip motion planning:",
+            skip_phase_options,
+            multi_select=True,
+        )
+        
+        # Collect indices (skip the "[No phases to skip]" option)
+        if skip_selected and skip_selected[0] < len(selected_sequence):
+            skip_phases = set([idx for idx in skip_selected if idx < len(selected_sequence)])
+            if skip_phases:
+                print(f"\nWill skip motion planning for {len(skip_phases)} phase(s):")
+                for idx in sorted(skip_phases):
+                    gripper, handle = selected_sequence[idx]
+                    print(f"  Phase {idx+1}: {gripper} → {handle}")
+            else:
+                print("\nNo phases selected to skip.")
+        else:
+            print("\nNo phases will be skipped.")
+
     # Select frozen arms mode
     frozen_mode_options = [
         "auto - Freeze all arms except active gripper's arm",
@@ -631,6 +662,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             q_init=q_init,
             frozen_arms_mode=frozen_arms_mode,
             per_phase_frozen_arms=per_phase_frozen_arms,
+            skip_phases=skip_phases if skip_phases else None,
             verbose=True,
         )
 
@@ -654,6 +686,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                             max_iterations_per_edge=1000000,
                             frozen_arms_mode=frozen_arms_mode,
                             per_phase_frozen_arms=per_phase_frozen_arms,
+                            skip_phases=skip_phases if skip_phases else None,
                             verbose=True,
                         )
                         if result.get("success"):
@@ -726,6 +759,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                                 max_iterations_per_edge=1000000,
                                 frozen_arms_mode=frozen_arms_mode,
                                 per_phase_frozen_arms=per_phase_frozen_arms,
+                                skip_phases=skip_phases if skip_phases else None,
                                 verbose=True,
                             )
                             if result.get("success"):
@@ -832,6 +866,7 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                                 max_iterations_per_edge=max_iters,
                                 frozen_arms_mode=frozen_arms_mode,
                                 per_phase_frozen_arms=per_phase_frozen_arms,
+                                skip_phases=skip_phases if skip_phases else None,
                                 verbose=True,
                             )
 
