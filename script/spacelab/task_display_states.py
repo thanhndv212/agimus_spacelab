@@ -1000,11 +1000,14 @@ def interactive_load_and_replay_paths(
     indices = []
 
     if use_json and hasattr(task.planner, "load_path_from_waypoints"):
-        # Load JSON waypoints
+        # Load JSON waypoints with graph validation
+        print("\nLoading JSON waypoints with graph validation...")
         for filepath in json_files:
             try:
                 idx = task.planner.load_path_from_waypoints(
-                    filepath, add_to_problem=True
+                    filepath, 
+                    add_to_problem=True,
+                    auto_setup_graph=True  # Validate graph metadata
                 )
                 indices.append(idx)
                 print(
