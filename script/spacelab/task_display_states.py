@@ -502,12 +502,15 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
 
     # Select phases to skip (optional)
     skip_phases = set()
-    if len(selected_sequence) > 1:
+    skip_all_phases = False
+    if len(selected_sequence) >= 1:
         print("\n=== Skip Phase Configuration (Optional) ===")
         print("Skip motion planning for selected phases.")
         print("Config generation will still execute; useful for testing.")
         
         skip_phase_options = [
+            "[Skip ALL phases - Config generation only]",
+        ] + [
             f"Phase {i+1}: {gripper} → {handle}"
             for i, (gripper, handle) in enumerate(selected_sequence)
         ] + ["[No phases to skip]"]
@@ -518,9 +521,20 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             multi_select=True,
         )
         
-        # Collect indices (skip the "[No phases to skip]" option)
-        if skip_selected and skip_selected[0] < len(selected_sequence):
-            skip_phases = set([idx for idx in skip_selected if idx < len(selected_sequence)])
+        # Check if "Skip ALL phases" (index 0) was selected
+        if skip_selected and 0 in skip_selected:
+            skip_phases = set(range(len(selected_sequence)))
+            skip_all_phases = True
+            print(f"\nSkipping ALL {len(selected_sequence)} phases - Config generation only")
+        # Collect individual phase indices (adjust for "Skip ALL" option at index 0)
+        elif skip_selected:
+            # Filter out the "[No phases to skip]" option (last index)
+            last_option_idx = len(skip_phase_options) - 1
+            skip_phases = set([
+                idx - 1  # Adjust for "Skip ALL" option at index 0
+                for idx in skip_selected 
+                if 0 < idx < last_option_idx  # Between "Skip ALL" and "No phases"
+            ])
             if skip_phases:
                 print(f"\nWill skip motion planning for {len(skip_phases)} phase(s):")
                 for idx in sorted(skip_phases):
@@ -672,6 +686,64 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
             print(planner.get_phase_summary())
         else:
             print("Sequence planning failed.")
+        
+        # Collect and browse configurations if all phases were skipped
+        if skip_all_phases and planner.config_gen:
+            print("\n" + "=" * 70)
+            print("Configuration Generation Complete")
+            print("=" * 70)
+            
+            # Collect all generated configs
+            generated_configs = {}
+            
+            # Add q_init (use local variable to ensure it's included)
+            generated_configs["q_init (Initial)"] = q_init
+            
+            # Collect configs from each phase
+            for phase_idx, phase_result in enumerate(planner.phase_results):
+                if not phase_result:
+                    continue
+                
+                gripper = phase_result.get("gripper", "")
+                handle = phase_result.get("handle", "")
+                phase_label = f"Phase {phase_idx + 1}: {gripper} → {handle}"
+                
+                # Add edge configs (waypoints)
+                edge_sequence = phase_result.get("edges", [])
+                for edge_idx, edge_name in enumerate(edge_sequence):
+                    config_label = f"q_phase{phase_idx}_edge{edge_idx}"
+                    if config_label in planner.config_gen.configs:
+                        # Create friendly name from edge name
+                        edge_type = "waypoint"
+                        if "pregrasp" in edge_name.lower():
+                            edge_type = "pregrasp"
+                        elif "grasp" in edge_name.lower() and "pre" not in edge_name.lower():
+                            edge_type = "grasp"
+                        elif "placement" in edge_name.lower():
+                            edge_type = "placement"
+                        
+                        friendly_name = f"{phase_label} - Edge {edge_idx + 1} ({edge_type})"
+                        generated_configs[friendly_name] = planner.config_gen.configs[config_label]
+                
+                # Add final config for this phase
+                if "final_config" in phase_result:
+                    final_label = f"{phase_label} - Final"
+                    generated_configs[final_label] = phase_result["final_config"]
+            
+            print(f"\nGenerated {len(generated_configs)} configurations across {len(planner.phase_results)} phases")
+            print("\nBrowse configurations interactively?")
+            if input("Enter 'y' to browse, any other key to skip: ").strip().lower() == "y":
+                interactive_visualize_configs(task, generated_configs)
+        
+        # Offer replay for non-skipped phases
+        elif not skip_all_phases and planner.phase_results:
+            if result.get("success"):
+                print("\nReplay completed paths? (y/n)")
+                if input("> ").lower() == "y":
+                    planner.replay_sequence()
+        
+        # Handle failures with resume logic
+        if not result.get("success"):
             if non_stop and hasattr(planner, "get_resumable_state"):
                 print("Attempting automatic resume...")
                 while True:
@@ -700,12 +772,6 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                     except Exception as e2:
                         print(f"\nAuto-resume failed: {e2}")
                         # Keep looping; user can Ctrl+C to stop.
-
-        # Offer replay after all planning/resume attempts
-        if planner.phase_results:
-            print("\nReplay completed paths? (y/n)")
-            if input("> ").lower() == "y":
-                planner.replay_sequence()
 
     except Exception as e:
         print(f"\nSequence planning error: {e}")
@@ -774,11 +840,44 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                             print(f"\nAuto-resume failed: {e2}")
                             # Keep looping; user can Ctrl+C to stop.
 
-                    # Offer replay after all attempts in non-stop mode
-                    if planner.phase_results:
+                    # Offer replay after all attempts in non-stop mode (or config browsing if skip_all_phases)
+                    if not skip_all_phases and planner.phase_results:
                         print("\nReplay completed paths? (y/n)")
                         if input("> ").lower() == "y":
                             planner.replay_sequence()
+                    elif skip_all_phases and planner.phase_results and planner.config_gen:
+                        print("\nBrowse generated configurations? (y/n)")
+                        if input("> ").lower() == "y":
+                            # Collect configs
+                            generated_configs = {}
+                            # Use local q_init variable
+                            generated_configs["q_init (Initial)"] = q_init
+                            
+                            for phase_idx, phase_result in enumerate(planner.phase_results):
+                                if not phase_result:
+                                    continue
+                                gripper = phase_result.get("gripper", "")
+                                handle = phase_result.get("handle", "")
+                                phase_label = f"Phase {phase_idx + 1}: {gripper} → {handle}"
+                                edge_sequence = phase_result.get("edges", [])
+                                for edge_idx, edge_name in enumerate(edge_sequence):
+                                    config_label = f"q_phase{phase_idx}_edge{edge_idx}"
+                                    if config_label in planner.config_gen.configs:
+                                        edge_type = "waypoint"
+                                        if "pregrasp" in edge_name.lower():
+                                            edge_type = "pregrasp"
+                                        elif "grasp" in edge_name.lower() and "pre" not in edge_name.lower():
+                                            edge_type = "grasp"
+                                        elif "placement" in edge_name.lower():
+                                            edge_type = "placement"
+                                        friendly_name = f"{phase_label} - Edge {edge_idx + 1} ({edge_type})"
+                                        generated_configs[friendly_name] = planner.config_gen.configs[config_label]
+                                if "final_config" in phase_result:
+                                    final_label = f"{phase_label} - Final"
+                                    generated_configs[final_label] = phase_result["final_config"]
+                            
+                            print(f"\nGenerated {len(generated_configs)} configurations")
+                            interactive_visualize_configs(task, generated_configs)
                 else:
                     while True:
                         resume_state = planner.get_resumable_state()
@@ -899,10 +998,41 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
                                 break
 
                     # Offer consolidated replay after interactive resume loop
-                    if planner.phase_results:
+                    if not skip_all_phases and planner.phase_results:
                         print("\nReplay completed paths? (y/n)")
                         if input("> ").lower() == "y":
                             planner.replay_sequence()
+                    elif skip_all_phases and planner.phase_results:
+                        # Offer config browsing even after failures in skip-all mode
+                        print("\nBrowse generated configurations? (y/n)")
+                        if input("> ").lower() == "y":
+                            # Collect configs as before
+                            generated_configs = {}
+                            # Use local q_init variable
+                            generated_configs["q_init (Initial)"] = q_init
+                            
+                            for phase_idx, phase_result in enumerate(planner.phase_results):
+                                if not phase_result:
+                                    continue
+                                gripper = phase_result.get("gripper", "")
+                                handle = phase_result.get("handle", "")
+                                phase_label = f"Phase {phase_idx + 1}: {gripper} → {handle}"
+                                edge_sequence = phase_result.get("edges", [])
+                                for edge_idx, edge_name in enumerate(edge_sequence):
+                                    config_label = f"q_phase{phase_idx}_edge{edge_idx}"
+                                    if config_label in planner.config_gen.configs:
+                                        edge_type = "waypoint"
+                                        if "pregrasp" in edge_name.lower():
+                                            edge_type = "pregrasp"
+                                        elif "grasp" in edge_name.lower() and "pre" not in edge_name.lower():
+                                            edge_type = "grasp"
+                                        friendly_name = f"{phase_label} - Edge {edge_idx + 1} ({edge_type})"
+                                        generated_configs[friendly_name] = planner.config_gen.configs[config_label]
+                                if "final_config" in phase_result:
+                                    final_label = f"{phase_label} - Final"
+                                    generated_configs[final_label] = phase_result["final_config"]
+                            
+                            interactive_visualize_configs(task, generated_configs)
 
         # Show saved files summary
         if auto_save_dir and planner.get_saved_path_files():
