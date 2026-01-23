@@ -119,12 +119,12 @@ class RobotJoints:
 
 class InitialConfigurations:
     """Initial joint configurations for robots and objects."""
-    
+
     # Robot joint configurations (in radians)
     UR10 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # 6 DOF
     VISPA_BASE = [0.0, 0.0]  # 2 DOF base
     VISPA_ARM = [0.0, 3.14, 0.0, 0.0, 0.0, 0.0]  # 6 DOF arm
-    
+
     # Object poses in XYZRPY format [x, y, z, roll, pitch, yaw]
     RS1 = [
         -0.46567999999999976,
@@ -154,12 +154,12 @@ class InitialConfigurations:
     ]
 
     RS4 = [
-        0.38432000000000011,
-        2.0219489999999993,
+        0.38432000027622287,
+        2.0134709992570583,
         -0.99423100120426089,
-        1.5707938223931903,
-        -3.1415918612707121,
-        2.0943948257717535,
+        1.4828606077991944,
+        -2.9906356348103711,
+        2.1010496873808218,
     ]
 
     RS5 = [
@@ -188,7 +188,7 @@ class InitialConfigurations:
         -3.2988203261954171e-07,
         1.5707963267957175,
     ]
-    
+
     FRAME_GRIPPER = [
         -0.13349999871947557,
         1.3322770029736009,
@@ -197,7 +197,7 @@ class InitialConfigurations:
         -3.1415923241839976,
         1.5707963267958001,
     ]
-    
+
     CLEAT_GRIPPER = [
         0.04650005078371261,
         1.510277021366528,
