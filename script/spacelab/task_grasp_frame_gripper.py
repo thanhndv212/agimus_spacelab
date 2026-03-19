@@ -79,19 +79,17 @@ class GraspFrameGripperTask(ManipulationTask):
             remove_distance=False
         )
 
-        # In this scenario, the SRDF gripper/handle frames are on fixed/fake
-        # links (children of the EE link / object link). Disable collisions
-        # between the whole EE subtree and the object subtree so factory grasp
-        # planning doesn't fail on link-level collisions.
-        if self.backend == "corba":
-            self.scene_builder.disable_collisions_between_subtrees(
-                "spacelab/ur10_link_7",
-                self.task_config.TOOL_CONTACT_JOINT,
-                remove_collision=True,
-                remove_distance=False,
-                verbose=True,
-                max_pairs=200,
-            )
+        # Disable collisions between the EE subtree and the grasped object
+        # subtree (SRDF grippers/handles live on fixed/fake child links whose
+        # collision geometries would otherwise cause planning failures).
+        self.scene_builder.disable_collisions_between_subtrees(
+            "spacelab/ur10_link_7",
+            self.task_config.TOOL_CONTACT_JOINT,
+            remove_collision=True,
+            remove_distance=False,
+            verbose=True,
+            max_pairs=200,
+        )
 
     def _factory_state_from_config(self, q: List[float]) -> str:
         """Best-effort detection of the current factory state name."""
