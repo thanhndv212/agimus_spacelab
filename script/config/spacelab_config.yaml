@@ -1,0 +1,265 @@
+# SpaceLab task configuration (YAML)
+# UR10 + VISPA composite robot manipulation on the SpaceLab testbed.
+#
+# Consumed by: YamlTaskLoader (src/agimus_spacelab/config/yaml_loader.py)
+# Test script:  script/spacelab/test_spacelab_yaml.py
+
+task: spacelab
+
+# ---------------------------------------------------------------------------
+# File paths (used by SceneBuilder)
+# ---------------------------------------------------------------------------
+paths:
+  robot:
+    spacelab:
+      urdf: "package://spacelab_mock_hardware/description/urdf/allRobots_spacelab_robot.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/allRobots_spacelab_robot.srdf"
+
+  environment:
+    ground_demo: "package://spacelab_mock_hardware/description/urdf/ground_demo.urdf"
+
+  objects:
+    frame_gripper:
+      urdf: "package://spacelab_mock_hardware/description/urdf/frame_gripper.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/frame_gripper.srdf"
+    screw_driver:
+      urdf: "package://spacelab_mock_hardware/description/urdf/screw_driver.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/screw_driver.srdf"
+    RS1:
+      urdf: "package://spacelab_mock_hardware/description/urdf/RS1.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/RS1.srdf"
+    RS2:
+      urdf: "package://spacelab_mock_hardware/description/urdf/RS2.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/RS2.srdf"
+    RS3:
+      urdf: "package://spacelab_mock_hardware/description/urdf/RS3.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/RS3.srdf"
+    RS4:
+      urdf: "package://spacelab_mock_hardware/description/urdf/RS4.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/RS4.srdf"
+    RS5:
+      urdf: "package://spacelab_mock_hardware/description/urdf/RS5.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/RS5.srdf"
+    RS6:
+      urdf: "package://spacelab_mock_hardware/description/urdf/RS6.urdf"
+      srdf: "package://spacelab_mock_hardware/description/srdf/RS6.srdf"
+
+# ---------------------------------------------------------------------------
+# Scene selection
+# ---------------------------------------------------------------------------
+robots:
+  - spacelab
+
+environments:
+  - ground_demo
+
+# ---------------------------------------------------------------------------
+# Robot joint groups
+# Each entry: {joint: <name>, initial: <rad>, bounds: [lo, hi]}
+# ---------------------------------------------------------------------------
+joint_groups:
+  UR10:
+    - {joint: spacelab/ur10_joint_1_2, initial: 0.0, bounds: [-6.2832, 6.2832]}
+    - {joint: spacelab/ur10_joint_2_3, initial: 0.0, bounds: [-6.2832, 6.2832]}
+    - {joint: spacelab/ur10_joint_3_4, initial: 0.0, bounds: [-6.2832, 6.2832]}
+    - {joint: spacelab/ur10_joint_4_5, initial: 0.0, bounds: [-6.2832, 6.2832]}
+    - {joint: spacelab/ur10_joint_5_6, initial: 0.0, bounds: [-6.2832, 6.2832]}
+    - {joint: spacelab/ur10_joint_6_7, initial: 0.0, bounds: [-6.2832, 6.2832]}
+
+  VISPA_BASE:
+    - {joint: spacelab/vispa2_joint_2_3,           initial: 0.0, bounds: [-5.0, 5.0]}
+    - {joint: spacelab/vispa2_joint_3_eeWorkbench,  initial: 0.0, bounds: [-5.0, 5.0]}
+
+  VISPA_ARM:
+    - {joint: spacelab/vispa_joint_1_2, initial: 0.0,  bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_2_3, initial: 3.14, bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_3_4, initial: 0.0,  bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_4_5, initial: 0.0,  bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_5_6, initial: 0.0,  bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_6_7, initial: 0.0,  bounds: [-3.14159, 3.14159]}
+
+# ---------------------------------------------------------------------------
+# Freeflyer bounds applied to every object root joint
+# translation: [[xmin,xmax], [ymin,ymax], [zmin,zmax]]
+# quaternion:  [[qxmin,qxmax], ...]
+# ---------------------------------------------------------------------------
+freeflyer_bounds:
+  translation: [[-2.0, 2.0], [-3.0, 3.0], [-2.0, 2.0]]
+  quaternion:  [[-1.0001, 1.0001], [-1.0001, 1.0001],
+                [-1.0001, 1.0001], [-1.0001, 1.0001]]
+
+# ---------------------------------------------------------------------------
+# Objects
+# initial_pose_xyzrpy: [x, y, z, roll, pitch, yaw]  (converted to xyzquat)
+# initial_pose_xyzquat: [x, y, z, qx, qy, qz, qw]  (used directly)
+# ---------------------------------------------------------------------------
+objects:
+  frame_gripper:
+    initial_pose_xyzrpy: [-0.13349999871947557, 1.3322770029736009, -1.2132999986768855,
+                           -5.098912860707481e-09, -3.1415923241839976, 1.5707963267958001]
+    handles:
+      - frame_gripper/h_FG_tool
+    contact_surfaces: []
+
+  screw_driver:
+    initial_pose_xyzrpy: [0.046500000888612281, 1.3322769978599074, -1.2103000009948957,
+                           3.1415926529240905, -3.2988203261954171e-07, 1.5707963267957175]
+    handles:
+      - screw_driver/h_SD_tool
+    contact_surfaces: []
+
+  RS1:
+    initial_pose_xyzrpy: [-0.46567999999999976, 2.0219499999999999, -0.34200800000000015,
+                            1.5707938223931903, -3.1415918612707121, 2.0943948257717535]
+    handles:
+      - RS1/h_RS1_FG
+      - RS1/h_RS1_WB
+      - RS1/h_RS1_CON0
+      - RS1/h_RS1_CON1
+      - RS1/h_RS1_CON2
+      - RS1/h_RS1_CON3
+    contact_surfaces: []
+
+  RS2:
+    initial_pose_xyzrpy: [0.38432000000000011, 2.0219489999999993, -0.34200799999999987,
+                           1.5707938223931903, -3.1415918612707121, 2.0943948257717535]
+    handles:
+      - RS2/h_RS2_FG
+      - RS2/h_RS2_WB
+      - RS2/h_RS2_CON0
+      - RS2/h_RS2_CON1
+      - RS2/h_RS2_CON2
+      - RS2/h_RS2_CON3
+    contact_surfaces: []
+
+  RS3:
+    initial_pose_xyzrpy: [0.38432000000000011, 2.0219489999999993, -0.63200800000000001,
+                           1.5707938223931903, -3.1415918612707121, 2.0943948257717535]
+    handles:
+      - RS3/h_RS3_FG
+      - RS3/h_RS3_WB
+      - RS3/h_RS3_CON0
+      - RS3/h_RS3_CON1
+      - RS3/h_RS3_CON2
+      - RS3/h_RS3_CON3
+    contact_surfaces: []
+
+  RS4:
+    initial_pose_xyzrpy: [0.38432000027622287, 2.0134709992570583, -0.99423100120426089,
+                           1.4828606077991944, -2.9906356348103711, 2.1010496873808218]
+    handles:
+      - RS4/h_RS4_FG
+      - RS4/h_RS4_WB
+      - RS4/h_RS4_CON0
+      - RS4/h_RS4_CON1
+      - RS4/h_RS4_CON2
+      - RS4/h_RS4_CON3
+    contact_surfaces: []
+
+  RS5:
+    initial_pose_xyzrpy: [-0.46567999967380558, 2.0133499991226964, -0.99421000142184635,
+                            1.4828606077991944, -2.9906356348103711, 2.1010496873808218]
+    handles:
+      - RS5/h_RS5_FG
+      - RS5/h_RS5_WB
+      - RS5/h_RS5_CON0
+      - RS5/h_RS5_CON1
+      - RS5/h_RS5_CON2
+      - RS5/h_RS5_CON3
+    contact_surfaces: []
+
+  RS6:
+    initial_pose_xyzrpy: [-0.46567999999999987, 2.0219489999999993, -0.63200800000000001,
+                            1.5707938223931903, -3.1415918612707121, 2.0943948257717535]
+    handles:
+      - RS6/h_RS6_FG
+      - RS6/h_RS6_WB
+      - RS6/h_RS6_CON0
+      - RS6/h_RS6_CON1
+      - RS6/h_RS6_CON2
+      - RS6/h_RS6_CON3
+    contact_surfaces: []
+
+# ---------------------------------------------------------------------------
+# Grippers (flat list of gripper frame names)
+# ---------------------------------------------------------------------------
+grippers:
+  - spacelab/g_ur10_tool
+  - spacelab/g_vispa_tool
+  - spacelab/g_vispa2_wb1
+  - spacelab/g_vispa2_wb2
+  - spacelab/g_vispa2_wb3
+  - spacelab/g_vispa2_wb4
+  - spacelab/g_vispa2_wb5
+  - spacelab/g_vispa2_wb6
+  - frame_gripper/g_FG_part
+  - screw_driver/g_SD_part
+
+# ---------------------------------------------------------------------------
+# Valid gripper → handle pairs (drives factory graph construction)
+# ---------------------------------------------------------------------------
+valid_pairs:
+  spacelab/g_ur10_tool:
+    - frame_gripper/h_FG_tool
+  spacelab/g_vispa_tool:
+    - screw_driver/h_SD_tool
+  spacelab/g_vispa2_wb1:
+    - RS1/h_RS1_WB
+  spacelab/g_vispa2_wb2:
+    - RS2/h_RS2_WB
+  spacelab/g_vispa2_wb3:
+    - RS3/h_RS3_WB
+  spacelab/g_vispa2_wb4:
+    - RS4/h_RS4_WB
+  spacelab/g_vispa2_wb5:
+    - RS5/h_RS5_WB
+  spacelab/g_vispa2_wb6:
+    - RS6/h_RS6_WB
+  frame_gripper/g_FG_part:
+    - RS1/h_RS1_FG
+    - RS2/h_RS2_FG
+    - RS3/h_RS3_FG
+    - RS4/h_RS4_FG
+    - RS5/h_RS5_FG
+    - RS6/h_RS6_FG
+  screw_driver/g_SD_part:
+    - RS1/h_RS1_CON0
+    - RS1/h_RS1_CON1
+    - RS1/h_RS1_CON2
+    - RS1/h_RS1_CON3
+    - RS2/h_RS2_CON0
+    - RS2/h_RS2_CON1
+    - RS2/h_RS2_CON2
+    - RS2/h_RS2_CON3
+    - RS3/h_RS3_CON0
+    - RS3/h_RS3_CON1
+    - RS3/h_RS3_CON2
+    - RS3/h_RS3_CON3
+    - RS4/h_RS4_CON0
+    - RS4/h_RS4_CON1
+    - RS4/h_RS4_CON2
+    - RS4/h_RS4_CON3
+    - RS5/h_RS5_CON0
+    - RS5/h_RS5_CON1
+    - RS5/h_RS5_CON2
+    - RS5/h_RS5_CON3
+    - RS6/h_RS6_CON0
+    - RS6/h_RS6_CON1
+    - RS6/h_RS6_CON2
+    - RS6/h_RS6_CON3
+
+# ---------------------------------------------------------------------------
+# Environment contact surfaces (used by factory graph for placement)
+# ---------------------------------------------------------------------------
+environment_contacts:
+  ground_demo:
+    - ground_demo/ground_surface
+
+# ---------------------------------------------------------------------------
+# Planning defaults
+# ---------------------------------------------------------------------------
+planning:
+  validation_step: 0.01
+  projector_step: 0.1
+  max_iterations: 1000
+  max_random_attempts: 1000
