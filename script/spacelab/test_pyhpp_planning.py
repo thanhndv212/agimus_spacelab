@@ -38,12 +38,12 @@ class TestPyHPPPlanning(ManipulationTask):
             "spacelab_config",
             "TaskConfigurations.DisplayAllStates",
         )
-        
+
         # Filter to single grasp pair
         self.task_config = self.task_config.with_grasp_goals([
             "spacelab/g_ur10_tool grasps frame_gripper/h_FG_tool"
         ])
-        
+
         self.use_factory = True
         self.pyhpp_constraints = {}
 
@@ -65,8 +65,8 @@ class TestPyHPPPlanning(ManipulationTask):
             freeze_joint_substrings=self.FREEZE_JOINT_SUBSTRINGS,
             skip_graph=True,  # Grasp sequence builder creates its own graph
         )
-        
-        # Disable collision between robot arms and ground structure  
+
+        # Disable collision between robot arms and ground structure
         print("\nDisabling problematic collision pairs...")
         pairs_removed = 0
         collision_pairs = [
@@ -87,7 +87,7 @@ class TestPyHPPPlanning(ManipulationTask):
             except Exception as e:
                 print(f"   Could not disable {obstacle} <-> {joint}: {e}")
         print(f"✓ Disabled {pairs_removed} collision pair(s) with ground structure")
-        
+
         print("✓ Task initialized")
         print(f"  Backend: {type(self.planner).__name__}")
         print(f"  Graph builder: {type(self.graph_builder).__name__}")
@@ -99,7 +99,7 @@ class TestPyHPPPlanning(ManipulationTask):
             return False
 
         print(f"  Initial config size: {len(q_init)}")
-        
+
         # Check if initial config is collision-free
         print("\nChecking initial configuration for collisions...")
         try:
@@ -136,39 +136,35 @@ class TestPyHPPPlanning(ManipulationTask):
 
         # Plan sequence
         grasp_sequence = [("spacelab/g_ur10_tool", "frame_gripper/h_FG_tool")]
-        
+
         print("\nPlanning grasp sequence...")
         print(f"  Sequence: {grasp_sequence}")
-        
+
         try:
             result = seq_planner.plan_sequence(
                 grasp_sequence=grasp_sequence,
                 q_init=q_init,
                 verbose=True,
             )
-            
+
             if result["success"]:
                 print("\n" + "="*70)
                 print("✓ PLANNING SUCCEEDED")
                 print("="*70)
                 print(seq_planner.get_phase_summary())
-                
-                # Offer replay
-                num_paths = result.get("num_paths", 0)
+
+                # Interactive replay loop
+                all_paths = [
+                    p
+                    for phase in seq_planner.phase_results
+                    for p in phase.get("paths", [])
+                    if p is not None
+                ]
+                num_paths = len(all_paths)
                 if num_paths > 0:
                     print(f"\n✓ Generated {num_paths} path(s)")
-                    
-                    user_input = input("\nReplay paths? [y/N]: ").strip().lower()
-                    if user_input == 'y':
-                        print("\nReplaying paths...")
-                        for i in range(num_paths):
-                            print(f"  Playing path {i}...")
-                            try:
-                                self.planner.play_path(i)
-                            except Exception as e:
-                                print(f"  ⚠ Failed to play path {i}: {e}")
-                        print("✓ Replay complete")
-                
+                    self._interactive_replay(seq_planner, num_paths)
+
                 return True
             else:
                 print("\n" + "="*70)
@@ -176,7 +172,7 @@ class TestPyHPPPlanning(ManipulationTask):
                 print("="*70)
                 print(f"Reason: {result.get('error', 'Unknown')}")
                 return False
-                
+
         except Exception as e:
             print("\n" + "="*70)
             print("✗ PLANNING ERROR")
@@ -185,6 +181,95 @@ class TestPyHPPPlanning(ManipulationTask):
             import traceback
             traceback.print_exc()
             return False
+
+    def _interactive_replay(self, seq_planner, num_paths: int):
+        """Interactive replay menu.
+
+        Available commands:
+          a       — replay all paths in sequence
+          <index> — replay a single path by 0-based index
+          q       — quit replay
+        """
+        # Collect flat list of (display_label, path_obj) for single-path replay
+        path_items = []
+        for phase in seq_planner.phase_results:
+            for idx, path_obj in enumerate(phase.get("paths", [])):
+                if path_obj is not None:
+                    edge_names = phase.get("edges", [])
+                    label = (
+                        edge_names[idx]
+                        if idx < len(edge_names)
+                        else f"phase {phase['phase']} path {idx}"
+                    )
+                    path_items.append((label, path_obj))
+
+        print("\n" + "-" * 50)
+        print("Replay menu")
+        print(f"  {num_paths} path(s) available")
+        for i, (label, _) in enumerate(path_items):
+            print(f"    [{i}]  {label}")
+        print("  [a]  replay all in sequence")
+        print("  [q]  quit")
+        print("-" * 50)
+
+        while True:
+            try:
+                raw = input("replay> ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+
+            if raw in ("q", "quit", "exit", ""):
+                break
+
+            if raw in ("a", "all"):
+                print("\nReplaying full sequence...")
+                try:
+                    seq_planner.replay_sequence(speed=1.0)
+                    print("✓ Done")
+                except Exception as e:
+                    print(f"  ⚠ replay_sequence failed: {e}")
+                    self._replay_fallback(path_items)
+                continue
+
+            try:
+                idx = int(raw)
+            except ValueError:
+                print(
+                    f"  Unknown command '{raw}'. "
+                    "Enter a path index, 'a' for all, or 'q' to quit."
+                )
+                continue
+
+            if idx < 0 or idx >= len(path_items):
+                print(
+                    f"  Index {idx} out of range "
+                    f"(0 – {len(path_items) - 1})"
+                )
+                continue
+
+            label, path_obj = path_items[idx]
+            print(f"\nReplaying [{idx}] {label} ...")
+            try:
+                if isinstance(path_obj, int):
+                    self.planner.play_path(path_obj)
+                else:
+                    self.planner.play_path_vector(path_obj)
+                print("✓ Done")
+            except Exception as e:
+                print(f"  ⚠ Failed: {e}")
+
+    def _replay_fallback(self, path_items):
+        """Replay all items directly when replay_sequence fails."""
+        for label, path_obj in path_items:
+            print(f"  Playing: {label}")
+            try:
+                if isinstance(path_obj, int):
+                    self.planner.play_path(path_obj)
+                else:
+                    self.planner.play_path_vector(path_obj)
+            except Exception as ex:
+                print(f"    ⚠ Failed: {ex}")
 
 
 def main():
