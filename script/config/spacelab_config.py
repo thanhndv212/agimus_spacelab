@@ -201,6 +201,8 @@ class ManipulationConfig:
     """Canonical SpaceLab manipulation configuration."""
 
     MODEL_PATHS = DEFAULT_PATHS
+    JOINT_BOUNDS = JointBounds
+    INITIAL_CONFIGURATIONS = InitialConfigurations
     ROBOT_NAMES = ["spacelab"]
     ENVIRONMENT_NAMES = ["ground_demo"]
 
