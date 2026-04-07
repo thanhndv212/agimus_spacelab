@@ -165,22 +165,30 @@ def interactive_replay_path(task, cfg, freeze_joint_substrings) -> None:
         input("Press Enter to continue...")
         return
 
-    options = [f"Path {i}" for i in range(num_paths)] + ["[Exit]"]
+    options = (
+        ["[All] Replay all paths in sequence"]
+        + [f"Path {i}" for i in range(num_paths)]
+        + ["[Exit]"]
+    )
     selected = interactive_menu(
         "Select path to replay:",
         options,
         multi_select=False,
     )
 
-    if not selected or selected[0] >= num_paths:
+    if not selected or selected[0] == len(options) - 1:
         return
 
-    path_id = int(selected[0])
-    print(f"\n=== Replaying Path {path_id} ===")
-    try:
-        task.planner.play_path(path_id)
-    except Exception as e:
-        print(f"Failed to replay path {path_id}: {e}")
+    if selected[0] == 0:  # Replay all
+        print(f"\n=== Replaying all {num_paths} paths in sequence ===")
+        replay_paths(task.planner, list(range(num_paths)))
+    else:
+        path_id = selected[0] - 1  # offset by the "All" entry
+        print(f"\n=== Replaying Path {path_id} ===")
+        try:
+            task.planner.play_path(path_id)
+        except Exception as e:
+            print(f"Failed to replay path {path_id}: {e}")
     input("Press Enter to continue...")
 
 
@@ -199,7 +207,84 @@ def interactive_grasp_sequence(task, cfg, freeze_joint_substrings) -> None:
     )
     result = builder.run()
 
+    # Persist the planner so "Resume last grasp sequence" can use it.
+    # Store it whether planning succeeded or failed — needed for resume.
+    seq_planner = result.get("planner")
+    if seq_planner is not None:
+        task._last_seq_planner = seq_planner
+
     input("\n\nPress Enter to continue...")
+
+
+def interactive_resume_sequence(task, cfg, freeze_joint_substrings) -> None:
+    """Resume the last grasp sequence from its failure point."""
+    print("\n=== Resume Last Grasp Sequence ===")
+
+    seq_planner = getattr(task, "_last_seq_planner", None)
+    if seq_planner is None:
+        print(
+            "No previous sequence to resume. Run 'Plan grasp sequence' first."
+        )
+        input("Press Enter to continue...")
+        return
+
+    if not ensure_task_ready(
+        task, cfg, freeze_joint_substrings, full_graph=False
+    ):
+        input("Press Enter to continue...")
+        return
+
+    resume_state = seq_planner.get_resumable_state()
+    if resume_state is None:
+        print(
+            "Previous sequence already completed successfully (nothing to resume)."
+        )
+        input("Press Enter to continue...")
+        return
+
+    while True:
+        print(
+            f"\nFailed at Phase {resume_state['phase_idx'] + 1}, "
+            f"Edge {resume_state['edge_idx'] + 1}: "
+            f"{resume_state['edge_name']}"
+        )
+        print(f"  Completed phases: {resume_state['completed_phases']}")
+        print(f"  Error: {resume_state['error']}")
+
+        resume_options = [
+            "Retry failed phase from beginning",
+            "Retry only the failed edge",
+            "Cancel",
+        ]
+        sel = interactive_menu(
+            "Resume options:", resume_options, multi_select=False
+        )
+        if not sel or sel[0] == 2:
+            break
+
+        retry_from = 0 if sel[0] == 0 else -1
+        try:
+            seq_result = seq_planner.resume_sequence(
+                retry_from_edge=retry_from,
+                verbose=True,
+            )
+        except RuntimeError as exc:
+            print(f"Resume failed: {exc}")
+            break
+
+        if seq_result.get("success"):
+            print("\n" + "=" * 70)
+            print("Sequence planning succeeded!")
+            print(seq_planner.get_phase_summary())
+            task._last_seq_planner = None  # cleared after success
+            break
+
+        resume_state = seq_planner.get_resumable_state()
+        if resume_state is None:
+            print("No further resumable state.")
+            break
+
+    input("\nPress Enter to continue...")
 
 
 def interactive_load_and_replay_paths(
@@ -337,12 +422,11 @@ def interactive_main_menu(
             "[1] Load full graph (required for configs/solving)",
             "[2] Browse configurations",
             "[3] Visualize constraint graph",
-            "[4] Solve planning problem",
-            "[5] Solve with TransitionPlanner",
-            "[6] Plan grasp sequence (incremental)",
-            "[7] Replay path (from ProblemSolver)",
-            "[8] Load & replay saved paths (from files)",
-            "[9] Exit",
+            "[4] Plan grasp sequence (incremental)",
+            "[5] Resume last grasp sequence",
+            "[6] Replay path (from ProblemSolver)",
+            "[7] Load & replay saved paths (from files)",
+            "[8] Exit",
         ]
 
         selected = interactive_menu(
@@ -351,7 +435,7 @@ def interactive_main_menu(
             multi_select=False,
         )
 
-        if not selected or selected[0] == 9:  # Exit
+        if not selected or selected[0] == 8:  # Exit
             break
 
         if selected[0] == 0:  # Load scene only
@@ -447,79 +531,16 @@ def interactive_main_menu(
                 )
                 input("Press Enter to continue...")
 
-        elif selected[0] == 4:  # Solve planning problem
-            if not ensure_task_ready(
-                task, cfg, freeze_joint_substrings, full_graph=True
-            ):
-                input("Press Enter to continue...")
-                continue
-
-            if not configs:
-                print("Generating configurations...")
-                try:
-                    q_init = task.q_init
-                    if q_init:
-                        configs.update(task.generate_configurations(q_init))
-                except Exception as e:
-                    print(f"Failed to generate configurations: {e}")
-                    input("Press Enter to continue...")
-                    continue
-
-            print("\n=== Solve Planning Problem ===")
-            try:
-                result = task.run(
-                    visualize=True,
-                    solve=True,
-                    preferred_configs=[],
-                    max_iterations=5000,
-                    solve_mode="manipulation-planner",
-                )
-                if result.get("solved", False):
-                    print("Planning succeeded!")
-                else:
-                    print("Planning completed (check output for details).")
-            except Exception as e:
-                print(f"Planning error: {e}")
-            input("Press Enter to continue...")
-
-        elif selected[0] == 5:  # Solve with TransitionPlanner
-            if not ensure_task_ready(
-                task, cfg, freeze_joint_substrings, full_graph=True
-            ):
-                input("Press Enter to continue...")
-                continue
-
-            if not configs:
-                print("Generating configurations...")
-                try:
-                    q_init = task.q_init
-                    if q_init:
-                        configs.update(task.generate_configurations(q_init))
-                except Exception as e:
-                    print(f"Failed to generate configurations: {e}")
-                    input("Press Enter to continue...")
-                    continue
-
-            print("\n=== Solve with TransitionPlanner ===")
-            try:
-                task.run(
-                    visualize=True,
-                    solve=True,
-                    preferred_configs=[],
-                    max_iterations=5000,
-                    solve_mode="transition-planner",
-                )
-            except Exception as e:
-                print(f"Planning error: {e}")
-            input("Press Enter to continue...")
-
-        elif selected[0] == 6:  # Plan grasp sequence
+        elif selected[0] == 4:  # Plan grasp sequence
             interactive_grasp_sequence(task, cfg, freeze_joint_substrings)
 
-        elif selected[0] == 7:  # Replay path from ProblemSolver
+        elif selected[0] == 5:  # Resume last grasp sequence
+            interactive_resume_sequence(task, cfg, freeze_joint_substrings)
+
+        elif selected[0] == 6:  # Replay path from ProblemSolver
             interactive_replay_path(task, cfg, freeze_joint_substrings)
 
-        elif selected[0] == 8:  # Load & replay saved paths from files
+        elif selected[0] == 7:  # Load & replay saved paths from files
             interactive_load_and_replay_paths(
                 task, cfg, freeze_joint_substrings
             )
@@ -831,9 +852,49 @@ def main(argv: list[str] | None = None) -> int:
             if seq_result["success"]:
                 print(seq_planner.get_phase_summary())
                 return 0
-            else:
-                print("Sequence planning failed")
-                return 1
+
+            # Interactive resume loop on failure.
+            while True:
+                resume_state = seq_planner.get_resumable_state()
+                if resume_state is None:
+                    print("Sequence planning failed (no resumable state).")
+                    return 1
+
+                print(
+                    f"\n=== Failed at Phase {resume_state['phase_idx'] + 1}, "
+                    f"Edge {resume_state['edge_idx'] + 1}: "
+                    f"{resume_state['edge_name']} ==="
+                )
+                print(
+                    f"  Completed phases: {resume_state['completed_phases']}"
+                )
+                print(f"  Error: {resume_state['error']}")
+
+                resume_options = [
+                    "Retry failed phase from beginning",
+                    "Retry only the failed edge",
+                    "Abort",
+                ]
+                sel = interactive_menu(
+                    "Resume options:", resume_options, multi_select=False
+                )
+                if not sel or sel[0] == 2:
+                    print("Sequence planning aborted.")
+                    return 1
+
+                retry_from = 0 if sel[0] == 0 else -1
+                try:
+                    seq_result = seq_planner.resume_sequence(
+                        retry_from_edge=retry_from,
+                        verbose=True,
+                    )
+                except RuntimeError as exc:
+                    print(f"Resume failed: {exc}")
+                    return 1
+
+                if seq_result.get("success"):
+                    print(seq_planner.get_phase_summary())
+                    return 0
 
         except Exception as e:
             print(f"Sequence planning error: {e}")
