@@ -535,7 +535,7 @@ class DisplayStatesTask(ManipulationTask):
 
     FREEZE_JOINT_SUBSTRINGS = []
 
-    def __init__(self, backend: str = "corba"):
+    def __init__(self, backend: str = "pyhpp"):
         _config_dir = get_default_config_dir(Path(__file__))
         if str(_config_dir) not in sys.path:
             sys.path.insert(0, str(_config_dir))
