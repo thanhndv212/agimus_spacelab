@@ -20,16 +20,14 @@ Multi-arm collaborative manipulation framework for SpaceLab assembly tasks using
 This framework enables UR10 and VISPA robots to collaboratively assemble RS modules through:
 
 1. **Modular Design**: Separation of configuration, tools, and task logic
-2. **Task Orchestration**: Dependency-based scheduling with resource management
-3. **Parallel Execution**: Concurrent task execution across multiple arms
-4. **Behavior Trees**: Dynamic task composition and failure recovery (planned)
+2. **Grasp Sequence Planning**: Multi-phase manipulation with constraint graph edges
+3. **Dual Backend Support**: CORBA and PyHPP backends with unified interface
 
 ### Key Features
 
 ✅ Reusable manipulation planning utilities  
 ✅ Fluent APIs for scene setup and constraint creation  
-✅ Task orchestration with resource conflict resolution  
-✅ Multi-arm coordination framework  
+✅ Multi-phase grasp sequence planning with resume support  
 ✅ **Dual backend support: CORBA and PyHPP**  
 ✅ Scene visualization tools  
 
@@ -90,7 +88,7 @@ planner, robot, ps = builder.build(objects=["frame_gripper"])
 | **Performance** | ⚡ Good | ⚡⚡ Excellent |
 | **Collision Management** | ✅ Full support | ⚠️ Partial |
 | **Path Optimization** | ✅ Multiple methods | ✅ Progressive |
-| **Pinocchio Integration** | ➡️ Via bridge | ✅ Direct |
+| **Pinocchio Integration** | ➡️ Indirect | ✅ Direct |
 | **Python API** | 🔌 CORBA RPC | 🐍 Native bindings |
 | **Learning Curve** | 📚 Moderate | 📚 Lower |
 
@@ -98,21 +96,6 @@ planner, robot, ps = builder.build(objects=["frame_gripper"])
 ---
 
 ## Architecture
-
-### File Structure
-
-```
-script/
-├── config/
-│   └── spacelab_config.py           # Configuration data
-├── spacelab/
-│   ├── spacelab_tools.py            # Shared utilities
-│   ├── task_orchestration.py        # Multi-arm orchestration
-│   ├── task_grasp_frame_gripper.py  # Example task
-│   ├── example_collaborative_assembly.py  # Multi-arm demo
-│   ├── visualize_scene.py           # Scene visualization
-│   └── README.md                    # This file
-```
 
 ### System Layers
 
@@ -144,7 +127,9 @@ script/
 │               Atomic Task Layer                              │
 │   - Individual manipulation primitives                       │
 │   - Grasp, Place, Transport, Assemble, Handover             │
-│   - Pre/postconditions                                       │
+│   - ManipulationTask base class                              │
+│   - GraspSequencePlanner for multi-phase planning            │
+│   - Pre/postconditions                                        │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -175,10 +160,9 @@ src/agimus_spacelab/
 │   ├── graph.py             # GraphBuilder
 │   ├── constraints.py       # ConstraintBuilder
 │   └── config.py            # ConfigGenerator
-├── tasks/                   # Task orchestration
+├── tasks/                   # Task management
 │   ├── base.py              # ManipulationTask base class
-│   ├── orchestration.py     # TaskOrchestrator, TaskBuilder
-│   └── bridge.py            # PlanningBridge
+│   └── grasp_sequence.py    # GraspSequencePlanner
 ├── visualization/           # Visualization tools
 │   └── viz.py               # Graph viz, frame display
 ├── config/                  # Configuration utilities
@@ -310,7 +294,7 @@ all_configs = config_gen.configs  # Dict[str, List[float]]
 
 ### 3. Tasks (`agimus_spacelab.tasks`)
 
-Task abstractions and orchestration.
+Task abstractions for manipulation planning.
 
 #### **ManipulationTask - Base Class**
 
@@ -342,55 +326,6 @@ class GraspTask(ManipulationTask):
 task = GraspTask(backend="corba")
 task.setup()
 result = task.run(visualize=True, solve=False)
-```
-
-#### **TaskOrchestrator - Multi-Task Execution**
-
-```python
-from agimus_spacelab.tasks import TaskOrchestrator, TaskBuilder
-
-orchestrator = TaskOrchestrator(max_concurrent_tasks=2)
-orchestrator.setup_resources(
-    arms=["UR10", "VISPA"],
-    objects=["RS1", "RS2"]
-)
-
-# Build tasks with fluent API
-t1 = (TaskBuilder("t1", "UR10 grasp RS1")
-    .requires_arm("UR10")
-    .requires_object("RS1")
-    .with_execution(grasp_rs1_fn)
-    .build())
-
-t2 = (TaskBuilder("t2", "VISPA grasp RS2")
-    .requires_arm("VISPA")
-    .requires_object("RS2")
-    .with_execution(grasp_rs2_fn)
-    .build())
-
-orchestrator.add_task(t1)
-orchestrator.add_task(t2)
-orchestrator.run()  # Parallel execution
-```
-
-#### **AtomicTask - Low-Level Task Definition**
-
-```python
-from agimus_spacelab.tasks.orchestration import (
-    AtomicTask, Resource, ResourceType
-)
-
-task = AtomicTask(
-    task_id="t1",
-    name="Grasp RS1",
-    execute=lambda: grasp_rs1(),
-    preconditions={"RS1_at_dispenser"},
-    postconditions={"RS1_grasped"},
-    required_resources={
-        Resource(ResourceType.ARM, "UR10"),
-        Resource(ResourceType.OBJECT, "RS1")
-    }
-)
 ```
 
 ---
@@ -514,58 +449,6 @@ python visualize_scene.py --no-interactive
 
 ---
 
-## Multi-Arm Collaboration
-
-### Implementation Status
-
-#### ✅ Completed
-
-1. **Core Infrastructure** (`task_orchestration.py`)
-   - AtomicTask: Indivisible manipulation actions
-   - ResourceManager: Arm/object/workspace allocation
-   - TaskDependencyGraph: Dependency tracking
-   - TaskOrchestrator: Execution engine with concurrency
-
-2. **Example** (`example_collaborative_assembly.py`)
-   - Multi-arm assembly scenario (UR10 + VISPA)
-   - Parallel task execution
-   - Resource conflict resolution
-   - Dependency-based scheduling
-
-3. **Integration Points**
-   - Hooks for real motion planning
-   - Precondition/postcondition framework
-   - Timeout and retry logic
-
-#### 🔄 Development Roadmap
-
-**Phase 1: Integration with Existing Planners** (HIGH PRIORITY)
-- Bridge `ManipulationTask` to `AtomicTask`
-- Replace mock execution functions
-- Connect to real HPP planning
-
-**Phase 2: Behavior Tree Framework** (HIGH PRIORITY)
-- Implement Sequence, Selector, Parallel nodes
-- Enable dynamic task composition
-- Add failure recovery mechanisms
-
-**Phase 3: Synchronization Primitives** (MEDIUM PRIORITY)
-- Synchronization barriers for multi-arm coordination
-- Handover primitives between arms
-- Temporal alignment for collaborative actions
-
-**Phase 4: Failure Recovery** (MEDIUM PRIORITY)
-- Retry strategies
-- Alternative path planning
-- Resource reassignment
-
-**Phase 5: Learning & Optimization** (LOW PRIORITY)
-- Learn optimal task orderings
-- Execution time prediction
-- Adaptive scheduling
-
----
-
 ## Getting Started
 
 ### Prerequisites
@@ -603,16 +486,6 @@ python task_grasp_frame_gripper.py --no-viz --solve
 # Switch backends
 python task_grasp_frame_gripper.py --backend pyhpp
 python task_grasp_frame_gripper.py --backend corba --solve
-```
-
-#### 3. Run Multi-Arm Example
-
-```bash
-# Dry run (show execution plan)
-python example_collaborative_assembly.py --dry-run
-
-# Execute with mock functions
-python example_collaborative_assembly.py
 ```
 
 ---
@@ -665,92 +538,6 @@ if __name__ == "__main__":
     task.run(visualize=True, solve=False)
 ```
 
-### Pattern 2: Multi-Arm Collaboration
-
-```python
-from agimus_spacelab.tasks import TaskOrchestrator, TaskBuilder
-
-# Setup orchestrator
-orchestrator = TaskOrchestrator(max_concurrent_tasks=2)
-orchestrator.setup_resources(
-    arms=["UR10", "VISPA"],
-    objects=["RS1", "RS2"]
-)
-
-# Define parallel tasks
-t1 = (TaskBuilder("t1", "UR10 grasp RS1")
-    .requires_arm("UR10")
-    .requires_object("RS1")
-    .execute_with(ur10_grasp_rs1_fn)
-    .build())
-
-t2 = (TaskBuilder("t2", "VISPA grasp RS2")
-    .requires_arm("VISPA")
-    .requires_object("RS2")
-    .execute_with(vispa_grasp_rs2_fn)
-    .build())
-
-# Define collaborative task (depends on both)
-t3 = (TaskBuilder("t3", "Assemble RS1+RS2")
-    .depends_on("t1", "t2")
-    .requires_arm("UR10")
-    .requires_arm("VISPA")
-    .execute_with(assembly_fn)
-    .build())
-
-# Execute
-orchestrator.add_task(t1)
-orchestrator.add_task(t2)
-orchestrator.add_task(t3)
-orchestrator.run()  # t1 and t2 run in parallel, then t3
-```
-
----
-
-## Usage Patterns
-
-### Simple Sequential Assembly
-
-```python
-orchestrator = TaskOrchestrator()
-orchestrator.setup_resources(arms=["UR10"], objects=["RS1", "RS2"])
-
-t1 = TaskBuilder("t1", "Grasp RS1").requires_arm("UR10").build()
-t2 = TaskBuilder("t2", "Grasp RS2").depends_on("t1").requires_arm("UR10").build()
-
-orchestrator.add_task(t1)
-orchestrator.add_task(t2)
-orchestrator.run()
-```
-
-### Parallel Execution
-
-```python
-# Both run concurrently (different arms, no conflicts)
-t1 = TaskBuilder("t1", "UR10 work").requires_arm("UR10").build()
-t2 = TaskBuilder("t2", "VISPA work").requires_arm("VISPA").build()
-
-orchestrator.add_task(t1)
-orchestrator.add_task(t2)
-orchestrator.run()
-```
-
-### Collaborative Task
-
-```python
-# Both arms needed simultaneously
-t_prep1 = TaskBuilder("prep1", "UR10 prep").requires_arm("UR10").build()
-t_prep2 = TaskBuilder("prep2", "VISPA prep").requires_arm("VISPA").build()
-
-t_collab = (TaskBuilder("collab", "Assembly")
-    .depends_on("prep1", "prep2")
-    .requires_arm("UR10")
-    .requires_arm("VISPA")
-    .build())
-
-# prep1 and prep2 run in parallel, then collab uses both arms
-```
-
 ---
 
 ## Comparison: Before vs After Refactoring
@@ -775,57 +562,17 @@ t_collab = (TaskBuilder("collab", "Assembly")
 ✅ **Maintainability**: Centralized bug fixes  
 ✅ **Readability**: High-level task logic clear  
 ✅ **Extensibility**: Easy to add features  
-✅ **Collaboration**: Multi-arm orchestration  
 ✅ **Flexibility**: Dual backend support (CORBA/PyHPP)  
 
 ---
 
 ## Testing
 
-### Unit Tests (Planned)
-```python
-# test_orchestration.py
-def test_parallel_execution():
-    """Test independent tasks run concurrently."""
-    
-def test_dependency_blocking():
-    """Test dependent task waits for prerequisite."""
-    
-def test_resource_conflicts():
-    """Test conflicting resources are serialized."""
-```
-
 ### Integration Tests
 ```bash
 # Run example tasks
 python task_grasp_frame_gripper.py --solve
-python example_collaborative_assembly.py
 ```
-
----
-
-## Performance Considerations
-
-### Current Implementation
-- **Synchronous execution**: Sequential task execution in orchestrator
-- **Polling-based**: 0.1s sleep between scheduling cycles
-- **No prediction**: Greedy scheduling based on current state
-
-### Future Optimizations
-1. **Async execution**: Use asyncio for true concurrency
-2. **Event-driven**: Trigger scheduling on task completion
-3. **Predictive scheduling**: Estimate task durations, optimize globally
-4. **Resource reservation**: Pre-allocate resources for future tasks
-
----
-
-## Known Limitations
-
-1. ❌ **No real motion planning integration** (uses mocks)
-2. ❌ **No behavior tree framework** (linear execution only)
-3. ❌ **No failure recovery** beyond retries
-4. ❌ **No learning/adaptation** from execution history
-5. ❌ **No real-time constraints** (assumes task durations known)
 
 ---
 
