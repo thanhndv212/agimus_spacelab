@@ -28,11 +28,16 @@ class TestPyHPPPlanning(ManipulationTask):
     FREEZE_JOINT_SUBSTRINGS = ["vispa_", "vispa2"]
 
     def __init__(self, backend: str = "pyhpp"):
+        config_dir = get_default_config_dir(Path(__file__))
+        if str(config_dir) not in sys.path:
+            sys.path.insert(0, str(config_dir))
+        from spacelab_config import DEFAULT_PATHS, JointBounds  # noqa: PLC0415
         super().__init__(
             task_name="Test PyHPP Grasp Sequence",
             backend=backend,
+            FILE_PATHS=DEFAULT_PATHS,
+            joint_bounds=JointBounds,
         )
-        config_dir = get_default_config_dir(Path(__file__))
         self.task_config = load_task_config(
             config_dir,
             "spacelab_config",
@@ -46,6 +51,24 @@ class TestPyHPPPlanning(ManipulationTask):
 
         self.use_factory = True
         self.pyhpp_constraints = {}
+
+    def build_initial_config(self) -> list[float]:
+        """Build initial configuration from SpaceLab defaults."""
+        from spacelab_config import InitialConfigurations  # noqa: PLC0415
+        from agimus_spacelab.utils.transforms import xyzrpy_to_xyzquat
+        q_robot = []
+        for group in self.task_config.ROBOTS:
+            if hasattr(InitialConfigurations, group):
+                q_robot.extend(list(getattr(InitialConfigurations, group)))
+        q_objects = []
+        for obj_name in self.task_config.OBJECTS:
+            obj_attr = obj_name.replace("-", "_").replace(" ", "_").upper()
+            if hasattr(InitialConfigurations, obj_attr):
+                pose = xyzrpy_to_xyzquat(getattr(InitialConfigurations, obj_attr))
+                q_objects.extend(pose.tolist())
+            else:
+                q_objects.extend([0.0] * 7)
+        return q_robot + q_objects
 
     def run_test(self):
         """Run the planning test."""

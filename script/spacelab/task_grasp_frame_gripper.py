@@ -62,13 +62,34 @@ class GraspFrameGripperTask(ManipulationTask):
                         graph generation. If False, build graph manually.
             backend: "corba" or "pyhpp" - which backend to use
         """
+        from spacelab_config import DEFAULT_PATHS, JointBounds  # noqa: PLC0415
         super().__init__(
             task_name="Spacelab Manipulation: UR10 Grasps Frame Gripper",
-            backend=backend
+            backend=backend,
+            FILE_PATHS=DEFAULT_PATHS,
+            joint_bounds=JointBounds,
         )
         self.task_config = initialize_task_config()
         self.use_factory = use_factory
         self.pyhpp_constraints = {}
+
+    def build_initial_config(self) -> List[float]:
+        """Build initial configuration from SpaceLab defaults."""
+        from spacelab_config import InitialConfigurations  # noqa: PLC0415
+        from agimus_spacelab.utils.transforms import xyzrpy_to_xyzquat
+        q_robot = []
+        for group in self.task_config.ROBOTS:
+            if hasattr(InitialConfigurations, group):
+                q_robot.extend(list(getattr(InitialConfigurations, group)))
+        q_objects = []
+        for obj_name in self.task_config.OBJECTS:
+            obj_attr = obj_name.replace("-", "_").replace(" ", "_").upper()
+            if hasattr(InitialConfigurations, obj_attr):
+                pose = xyzrpy_to_xyzquat(getattr(InitialConfigurations, obj_attr))
+                q_objects.extend(pose.tolist())
+            else:
+                q_objects.extend([0.0] * 7)
+        return q_robot + q_objects
 
     def setup_collision_management(self) -> None:
         """Disable collision between tool and dispenser surface."""
