@@ -59,12 +59,12 @@ environments:
 # ---------------------------------------------------------------------------
 joint_groups:
   UR10:
-    - {joint: spacelab/ur10_joint_1_2, initial: 0.0, bounds: [-6.2832, 6.2832]}
-    - {joint: spacelab/ur10_joint_2_3, initial: 0.0, bounds: [-6.2832, 6.2832]}
-    - {joint: spacelab/ur10_joint_3_4, initial: 0.0, bounds: [-6.2832, 6.2832]}
-    - {joint: spacelab/ur10_joint_4_5, initial: 0.0, bounds: [-6.2832, 6.2832]}
-    - {joint: spacelab/ur10_joint_5_6, initial: 0.0, bounds: [-6.2832, 6.2832]}
-    - {joint: spacelab/ur10_joint_6_7, initial: 0.0, bounds: [-6.2832, 6.2832]}
+    - {joint: spacelab/ur10_joint_1_2, initial: 0.0, bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/ur10_joint_2_3, initial: 0.0, bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/ur10_joint_3_4, initial: -2.8., bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/ur10_joint_4_5, initial: 1.57, bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/ur10_joint_5_6, initial: 0.0, bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/ur10_joint_6_7, initial: 0.0, bounds: [-3.14159, 3.14159]}
 
   VISPA_BASE:
     - {joint: spacelab/vispa2_joint_2_3,           initial: 0.0, bounds: [-5.0, 5.0]}
@@ -73,8 +73,8 @@ joint_groups:
   VISPA_ARM:
     - {joint: spacelab/vispa_joint_1_2, initial: 0.0,  bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/vispa_joint_2_3, initial: 3.14, bounds: [-3.14159, 3.14159]}
-    - {joint: spacelab/vispa_joint_3_4, initial: 0.0,  bounds: [-3.14159, 3.14159]}
-    - {joint: spacelab/vispa_joint_4_5, initial: 0.0,  bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_3_4, initial: 2.8,  bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/vispa_joint_4_5, initial: 1.57,  bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/vispa_joint_5_6, initial: 0.0,  bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/vispa_joint_6_7, initial: 0.0,  bounds: [-3.14159, 3.14159]}
 

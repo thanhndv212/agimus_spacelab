@@ -128,9 +128,9 @@ class RobotJoints:
 class InitialConfigurations:
     """Initial joint configurations for robots and objects."""
 
-    UR10 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    UR10 = [0.0, 0.0, -2.8, 1.57, 0.0, 0.0]
     VISPA_BASE = [0.0, 0.0]
-    VISPA_ARM = [0.0, 3.14, 0.0, 0.0, 0.0, 0.0]
+    VISPA_ARM = [0.0, 3.14, 2.8, 1.57, 0.0, 0.0]
 
     RS1 = [-0.46567999999999976, 2.0219499999999999, -0.34200800000000015,
            1.5707938223931903, -3.1415918612707121, 2.0943948257717535]
@@ -161,7 +161,7 @@ class InitialConfigurations:
 class JointBounds:
     """Joint bounds for robots and free-flying objects."""
 
-    UR10_LIMITS = [(-2 * np.pi, 2 * np.pi)] * 6
+    UR10_LIMITS = [(-np.pi, np.pi)] * 6
     VISPA_BASE_LIMITS = [(-5.0, 5.0), (-5.0, 5.0)]
     VISPA_ARM_LIMITS = [(-np.pi, np.pi)] * 6
 
