@@ -157,8 +157,11 @@ class TestPyHPPPlanning(ManipulationTask):
             auto_save_dir=None,  # No auto-save
         )
 
-        # Plan sequence
-        grasp_sequence = [("spacelab/g_ur10_tool", "frame_gripper/h_FG_tool")]
+        # Plan sequence: grasp then release
+        grasp_sequence = [
+            ("spacelab/g_ur10_tool", "frame_gripper/h_FG_tool"),
+            ("spacelab/g_ur10_tool", None),  # release FG
+        ]
 
         print("\nPlanning grasp sequence...")
         print(f"  Sequence: {grasp_sequence}")
