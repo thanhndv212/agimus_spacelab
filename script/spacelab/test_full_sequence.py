@@ -200,6 +200,7 @@ class FullSequenceTask(ManipulationTask):
             pyhpp_constraints=getattr(self, "pyhpp_constraints", {}),
             graph_constraints=getattr(self, "_graph_constraints", None),
             auto_save_dir=auto_save_dir,
+            run_logger=self.run_logger,
         )
 
         print(

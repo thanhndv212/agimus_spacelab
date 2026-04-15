@@ -162,6 +162,7 @@ def run_task(backend: str = "pyhpp") -> bool:
         pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
         graph_constraints=getattr(task, "_graph_constraints", None),
         auto_save_dir=None,
+        run_logger=getattr(task, "run_logger", None),
     )
 
     grasp_sequence = [("spacelab/g_ur10_tool", "frame_gripper/h_FG_tool")]

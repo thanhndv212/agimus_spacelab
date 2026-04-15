@@ -841,6 +841,7 @@ def main(argv: list[str] | None = None) -> int:
                 pyhpp_constraints=getattr(task, "pyhpp_constraints", {}),
                 graph_constraints=getattr(task, "_graph_constraints", None),
                 auto_save_dir=getattr(args, "auto_save_dir", None),
+                run_logger=getattr(task, "run_logger", None),
             )
 
             seq_result = seq_planner.plan_sequence(
