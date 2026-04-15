@@ -7,16 +7,16 @@ Replicates the interactive_planning.py session with:
     1.  spacelab/g_ur10_tool     -> frame_gripper/h_FG_tool
     2.  frame_gripper/g_FG_part  -> RS1/h_RS1_FG
     3.  spacelab/g_vispa2_wb1    -> RS1/h_RS1_WB
-    4.  frame_gripper/g_FG_part  -> RS2/h_RS2_FG
-    5.  spacelab/g_vispa2_wb2    -> RS2/h_RS2_WB
-    6.  frame_gripper/g_FG_part  -> RS3/h_RS3_FG
-    7.  spacelab/g_vispa2_wb3    -> RS3/h_RS3_WB
-    8.  frame_gripper/g_FG_part  -> RS4/h_RS4_FG
-    9.  spacelab/g_vispa2_wb4    -> RS4/h_RS4_WB
-    10. frame_gripper/g_FG_part  -> RS5/h_RS5_FG
-    11. spacelab/g_vispa2_wb5    -> RS5/h_RS5_WB
-    12. frame_gripper/g_FG_part  -> RS6/h_RS6_FG
-    13. spacelab/g_vispa2_wb6    -> RS6/h_RS6_WB
+    4.  frame_gripper/g_FG_part  -> RS6/h_RS6_FG
+    5.  spacelab/g_vispa2_wb6    -> RS6/h_RS6_WB
+    6.  frame_gripper/g_FG_part  -> RS5/h_RS5_FG
+    7.  spacelab/g_vispa2_wb5    -> RS5/h_RS5_WB
+    8.  frame_gripper/g_FG_part  -> RS2/h_RS2_FG
+    9.  spacelab/g_vispa2_wb2    -> RS2/h_RS2_WB
+    10. frame_gripper/g_FG_part  -> RS3/h_RS3_FG
+    11. spacelab/g_vispa2_wb3    -> RS3/h_RS3_WB
+    12. frame_gripper/g_FG_part  -> RS4/h_RS4_FG
+    13. spacelab/g_vispa2_wb4    -> RS4/h_RS4_WB
 
   Frozen arms per phase (manual mode):
     Phase 0  (g_ur10_tool -> h_FG_tool):   ['vispa_', 'vispa2']
@@ -46,16 +46,16 @@ GRASP_SEQUENCE = [
     ("spacelab/g_ur10_tool", "frame_gripper/h_FG_tool"),
     ("frame_gripper/g_FG_part", "RS1/h_RS1_FG"),
     ("spacelab/g_vispa2_wb1", "RS1/h_RS1_WB"),
+    ("frame_gripper/g_FG_part", "RS6/h_RS6_FG"),
+    ("spacelab/g_vispa2_wb6", "RS6/h_RS6_WB"),
+    ("frame_gripper/g_FG_part", "RS5/h_RS5_FG"),
+    ("spacelab/g_vispa2_wb5", "RS5/h_RS5_WB"),
     ("frame_gripper/g_FG_part", "RS2/h_RS2_FG"),
     ("spacelab/g_vispa2_wb2", "RS2/h_RS2_WB"),
     ("frame_gripper/g_FG_part", "RS3/h_RS3_FG"),
     ("spacelab/g_vispa2_wb3", "RS3/h_RS3_WB"),
     ("frame_gripper/g_FG_part", "RS4/h_RS4_FG"),
     ("spacelab/g_vispa2_wb4", "RS4/h_RS4_WB"),
-    ("frame_gripper/g_FG_part", "RS5/h_RS5_FG"),
-    ("spacelab/g_vispa2_wb5", "RS5/h_RS5_WB"),
-    ("frame_gripper/g_FG_part", "RS6/h_RS6_FG"),
-    ("spacelab/g_vispa2_wb6", "RS6/h_RS6_WB"),
 ]
 
 # Per-phase arm-freeze keywords.  Keys are 0-based phase indices matching
@@ -68,16 +68,16 @@ PER_PHASE_FROZEN_ARMS: Dict[int, List[str]] = {
     0: ["vispa_", "vispa2"],  # ur10 grabs frame tool — freeze both vispas
     1: ["vispa_", "vispa2"],  # FG grabs RS1 — freeze both vispas
     2: ["vispa_"],  # vispa2_wb1 grabs RS1
-    3: ["vispa_"],  # FG_part grabs RS2 — ur10 active
-    4: ["vispa_"],  # vispa2_wb2 grabs RS2
-    5: ["vispa_"],  # FG_part grabs RS3 — ur10 active
-    6: ["vispa_"],  # vispa2_wb3 grabs RS3
-    7: ["vispa_"],  # FG_part grabs RS4 — ur10 active
-    8: ["vispa_"],  # vispa2_wb4 grabs RS4
-    9: ["vispa_"],  # FG_part grabs RS5 — ur10 active
-    10: ["vispa_"],  # vispa2_wb5 grabs RS5
-    11: ["vispa_"],  # FG_part grabs RS6 — ur10 active
-    12: ["vispa_"],  # vispa2_wb6 grabs RS6
+    3: ["vispa_"],  # FG_part grabs RS6 — ur10 active
+    4: ["vispa_"],  # vispa2_wb6 grabs RS6
+    5: ["vispa_"],  # FG_part grabs RS5 — ur10 active
+    6: ["vispa_"],  # vispa2_wb5 grabs RS5
+    7: ["vispa_"],  # FG_part grabs RS2 — ur10 active
+    8: ["vispa_"],  # vispa2_wb2 grabs RS2
+    9: ["vispa_"],  # FG_part grabs RS3 — ur10 active
+    10: ["vispa_"],  # vispa2_wb3 grabs RS3
+    11: ["vispa_"],  # FG_part grabs RS4 — ur10 active
+    12: ["vispa_"],  # vispa2_wb4 grabs RS4
 }
 
 TIMEOUT_PER_EDGE = 60.0
