@@ -334,6 +334,22 @@ class SpacelabTaskDefaults(ManipulationConfig):
     OBJECTS_INFO = ManipulationConfig.OBJECTS
     VALID_PAIRS_INFO = ManipulationConfig.VALID_PAIRS
 
+    # Arm-group definitions (mirrors arm_groups: in spacelab_config.yaml).
+    # Used by GraspSequencePlanner to determine which arms to freeze.
+    GRIPPER_TO_ARM_KEYWORD = {
+        "spacelab/g_ur10_tool": "ur10",
+        "frame_gripper/g_FG_part": "ur10",
+        "spacelab/g_vispa_tool": "vispa_",
+        "screw_driver/g_SD_part": "vispa_",
+        "spacelab/g_vispa2_wb1": "vispa2",
+        "spacelab/g_vispa2_wb2": "vispa2",
+        "spacelab/g_vispa2_wb3": "vispa2",
+        "spacelab/g_vispa2_wb4": "vispa2",
+        "spacelab/g_vispa2_wb5": "vispa2",
+        "spacelab/g_vispa2_wb6": "vispa2",
+    }
+    ALL_ARM_KEYWORDS = ["ur10", "vispa_", "vispa2"]
+
     # Optional optimizer configuration for TransitionPlanner solving.
     # When unset (None), TransitionPlanner uses its current defaults.
     TRANSITION_OPTIMIZERS = None

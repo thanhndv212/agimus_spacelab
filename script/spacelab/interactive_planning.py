@@ -751,7 +751,10 @@ def main(argv: list[str] | None = None) -> int:
     freeze_joint_substrings = list(DisplayStatesTask.FREEZE_JOINT_SUBSTRINGS)
     if args.interactive:
         print("\n=== Interactive Locked-Arm Selection ===")
-        freeze_joint_substrings = select_frozen_arms(freeze_joint_substrings)
+        freeze_joint_substrings = select_frozen_arms(
+            freeze_joint_substrings,
+            arm_options=getattr(cfg, "ALL_ARM_KEYWORDS", None),
+        )
         print(
             "Using freeze_joint_substrings: "
             f"{freeze_joint_substrings if freeze_joint_substrings else '[]'}"

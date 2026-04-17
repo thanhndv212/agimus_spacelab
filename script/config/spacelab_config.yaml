@@ -61,7 +61,7 @@ joint_groups:
   UR10:
     - {joint: spacelab/ur10_joint_1_2, initial: 0.0, bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/ur10_joint_2_3, initial: 0.0, bounds: [-3.14159, 3.14159]}
-    - {joint: spacelab/ur10_joint_3_4, initial: -2.8., bounds: [-3.14159, 3.14159]}
+    - {joint: spacelab/ur10_joint_3_4, initial: -2.8, bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/ur10_joint_4_5, initial: 1.57, bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/ur10_joint_5_6, initial: 0.0, bounds: [-3.14159, 3.14159]}
     - {joint: spacelab/ur10_joint_6_7, initial: 0.0, bounds: [-3.14159, 3.14159]}
@@ -87,6 +87,34 @@ freeflyer_bounds:
   translation: [[-2.0, 2.0], [-3.0, 3.0], [-2.0, 2.0]]
   quaternion:  [[-1.0001, 1.0001], [-1.0001, 1.0001],
                 [-1.0001, 1.0001], [-1.0001, 1.0001]]
+
+# ---------------------------------------------------------------------------
+# Arm groups — maps gripper frame names to their arm's joint keyword.
+# joint_keyword: substring used by freeze_joints_by_substrings() to lock
+#   all joints belonging to that arm.
+# grippers: list of full gripper frame names belonging to the arm.
+# Used by GraspSequencePlanner auto-freeze (frozen_arms_mode="auto").
+# ---------------------------------------------------------------------------
+arm_groups:
+  ur10:
+    joint_keyword: "ur10"
+    grippers:
+      - spacelab/g_ur10_tool
+      - frame_gripper/g_FG_part  # Frame Gripper is carried by the UR10
+  vispa_arm:
+    joint_keyword: "vispa_"
+    grippers:
+      - spacelab/g_vispa_tool
+      - screw_driver/g_SD_part   # Screw Driver is carried by the VISPA arm
+  vispa2:
+    joint_keyword: "vispa2"
+    grippers:
+      - spacelab/g_vispa2_wb1
+      - spacelab/g_vispa2_wb2
+      - spacelab/g_vispa2_wb3
+      - spacelab/g_vispa2_wb4
+      - spacelab/g_vispa2_wb5
+      - spacelab/g_vispa2_wb6
 
 # ---------------------------------------------------------------------------
 # Objects
