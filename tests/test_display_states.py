@@ -1,5 +1,5 @@
 """
-Tests for the task_display_states script with the PyHPP (pyhpp) backend.
+"""Tests for the interactive_planning script with the PyHPP (pyhpp) backend.
 
 These tests cover:
 - Feasible goal-state enumeration from the spacelab config (no HPP required).
@@ -29,10 +29,10 @@ if str(CONFIG_DIR) not in sys.path:
 # ---------------------------------------------------------------------------
 # Import the task script as a module (adds config dir to its own sys.path).
 # ---------------------------------------------------------------------------
-TASK_SCRIPT = SCRIPT_DIR / "spacelab" / "task_display_states.py"
+TASK_SCRIPT = SCRIPT_DIR / "spacelab" / "interactive_planning.py"
 
 _spec = importlib.util.spec_from_file_location(
-    "task_display_states", str(TASK_SCRIPT)
+    "interactive_planning", str(TASK_SCRIPT)
 )
 _task_mod: types.ModuleType | None = None
 _import_error: Exception | None = None
@@ -46,7 +46,7 @@ except Exception as exc:
 
 requires_task_script = pytest.mark.skipif(
     _task_mod is None,
-    reason=f"task_display_states could not be imported: {_import_error}",
+    reason=f"interactive_planning could not be imported: {_import_error}",
 )
 
 # ---------------------------------------------------------------------------
